@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import Map, { Marker, Source, Layer } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { loadLAEIData, scoreRoute } from "../utils/pollution";
 
 const SIMPLE_RASTER_STYLE = {
   version: 8,
@@ -24,68 +25,117 @@ const SIMPLE_RASTER_STYLE = {
   ],
 };
 
-const primaryRouteLayer = {
-  id: "route-line-primary",
-  type: "line",
-  paint: {
-    "line-color": "#1d4ed8",
-    "line-width": 5,
-  },
-};
+function getRouteLayerStyle(index, highlightedRoute) {
+  const isHighlighted = highlightedRoute === index;
+  const isPrimary = index === 0;
 
-const alternativeRouteLayer = {
-  id: "route-line-alt",
-  type: "line",
-  paint: {
-    "line-color": "#6b7280",
-    "line-width": 3,
-    "line-dasharray": [2, 2],
-  },
-};
+  return {
+    id: `route-layer-${index}`,
+    type: "line",
+    paint: {
+      "line-color": isHighlighted
+        ? "#dc2626"
+        : isPrimary
+        ? "#1d4ed8"
+        : "#6b7280",
+      "line-width": isHighlighted ? 7 : isPrimary ? 5 : 3,
+      "line-opacity": isHighlighted ? 0.95 : 0.85,
+      "line-dasharray": isPrimary ? [1, 0] : [2, 2],
+    },
+  };
+}
 
-export default function MapDisplay() {
-  const [start, setStart] = useState(null);
-  const [end, setEnd] = useState(null);
-  const [routesGeojson, setRoutesGeojson] = useState(null);
-  const [routesInfo, setRoutesInfo] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const resetAll = () => {
-    setStart(null);
-    setEnd(null);
+export default function MapView({
+  routesGeojson,
+  setRoutesGeojson,
+  routesInfo,
+  setRoutesInfo,
+  loading,
+  setLoading,
+  highlightedRoute,
+  setHighlightedRoute,
+  status,
+  setStatus,
+  quickPickRequest,
+  startPoint,
+  endPoint,
+  setStartPoint,
+  setEndPoint,
+  setStartQuery,
+  setEndQuery,
+}) {
+  const clearRouteResults = () => {
     setRoutesGeojson(null);
     setRoutesInfo([]);
+    setHighlightedRoute?.(null);
+  };
+
+  const resetAll = () => {
+    setStartPoint(null);
+    setEndPoint(null);
+    setStartQuery?.("");
+    setEndQuery?.("");
+    clearRouteResults();
+    setStatus?.("idle");
   };
 
   const handleMapClick = (event) => {
     const { lng, lat } = event.lngLat;
 
-    if (!start) {
-      setStart({ lng, lat });
-      setEnd(null);
-      setRoutesGeojson(null);
-      setRoutesInfo([]);
+    if (!startPoint) {
+      const nextStart = {
+        lat,
+        lng,
+        label: `Pinned start (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
+      };
+      setStartPoint(nextStart);
+      setStartQuery?.(nextStart.label);
+      setEndPoint(null);
+      setEndQuery?.("");
+      clearRouteResults();
+      setStatus?.("idle");
       return;
     }
 
-    if (!end) {
-      setEnd({ lng, lat });
+    if (!endPoint) {
+      const nextEnd = {
+        lat,
+        lng,
+        label: `Pinned end (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
+      };
+      setEndPoint(nextEnd);
+      setEndQuery?.(nextEnd.label);
+      setHighlightedRoute?.(null);
+      setStatus?.("idle");
       return;
     }
 
-    // Third click: reset and choose a new start point
-    setStart({ lng, lat });
-    setEnd(null);
-    setRoutesGeojson(null);
-    setRoutesInfo([]);
+    const nextStart = {
+      lat,
+      lng,
+      label: `Pinned start (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
+    };
+    setStartPoint(nextStart);
+    setStartQuery?.(nextStart.label);
+    setEndPoint(null);
+    setEndQuery?.("");
+    clearRouteResults();
+    setStatus?.("idle");
   };
 
-  const fetchRoute = async () => {
-    if (!start || !end) return;
+  const fetchRoute = async (customStart = null, customEnd = null) => {
+    const activeStart = customStart || startPoint;
+    const activeEnd = customEnd || endPoint;
+
+    if (!activeStart || !activeEnd) return;
 
     setLoading(true);
+    setHighlightedRoute?.(null);
+    setStatus?.("loading");
 
     try {
+      await loadLAEIData();
+
       const res = await fetch(
         "https://api.openrouteservice.org/v2/directions/foot-walking/geojson",
         {
@@ -96,8 +146,8 @@ export default function MapDisplay() {
           },
           body: JSON.stringify({
             coordinates: [
-              [start.lng, start.lat],
-              [end.lng, end.lat],
+              [activeStart.lng, activeStart.lat],
+              [activeEnd.lng, activeEnd.lat],
             ],
             alternative_routes: {
               target_count: 3,
@@ -113,8 +163,6 @@ export default function MapDisplay() {
       }
 
       const data = await res.json();
-      console.log("ORS response:", data);
-
       setRoutesGeojson(data);
 
       const parsedRoutes =
@@ -133,33 +181,75 @@ export default function MapDisplay() {
             props.duration ??
             null;
 
+          const pollutionResult = scoreRoute(feature?.geometry?.coordinates || []);
+
           return {
             id: index,
+            originalIndex: index,
+            name:
+              feature?.properties?.name ||
+              `Route ${String.fromCharCode(65 + index)}`,
             distance,
             duration,
+            avgNO2: pollutionResult?.avgNO2 ?? null,
+            avgPM25: pollutionResult?.avgPM25 ?? null,
+            dataCoverage: pollutionResult?.dataCoverage ?? null,
+            geometry: feature?.geometry ?? null,
           };
         }) || [];
 
       setRoutesInfo(parsedRoutes);
+      setStatus?.("done");
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch route. Check your ORS key or network.");
+      alert("Failed to fetch route or pollution data. Check your ORS key, data file, or network.");
+      setStatus?.("error");
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (!quickPickRequest) return;
+
+    const [startLat, startLng] = quickPickRequest.start;
+    const [endLat, endLng] = quickPickRequest.end;
+
+    const nextStart = {
+      lat: startLat,
+      lng: startLng,
+      label: "Quick pick start",
+    };
+    const nextEnd = {
+      lat: endLat,
+      lng: endLng,
+      label: "Quick pick end",
+    };
+
+    setStartPoint(nextStart);
+    setEndPoint(nextEnd);
+    setStartQuery?.(nextStart.label);
+    setEndQuery?.(nextEnd.label);
+
+    clearRouteResults();
+    setStatus?.("idle");
+
+    fetchRoute(nextStart, nextEnd);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickPickRequest]);
+
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <h1 style={{ marginBottom: 8 }}>Urban Safety Walk</h1>
       <p style={{ marginTop: 0, color: "#555" }}>
-        Click once to choose a start point, click again to choose an end point,
-        then press “Compute route”.
+        Search place names or click the map to set a start and end point, then
+        compute routes.
       </p>
 
       <div
         style={{
-          width: "900px",
+          width: "100%",
+          maxWidth: "900px",
           height: "550px",
           border: "2px solid #cbd5e1",
           borderRadius: "8px",
@@ -178,12 +268,20 @@ export default function MapDisplay() {
           style={{ width: "100%", height: "100%" }}
           onClick={handleMapClick}
         >
-          {start && (
-            <Marker longitude={start.lng} latitude={start.lat} color="green" />
+          {startPoint && (
+            <Marker
+              longitude={startPoint.lng}
+              latitude={startPoint.lat}
+              color="green"
+            />
           )}
 
-          {end && (
-            <Marker longitude={end.lng} latitude={end.lat} color="red" />
+          {endPoint && (
+            <Marker
+              longitude={endPoint.lng}
+              latitude={endPoint.lat}
+              color="red"
+            />
           )}
 
           {routesGeojson?.features?.map((feature, index) => (
@@ -193,10 +291,7 @@ export default function MapDisplay() {
               type="geojson"
               data={feature}
             >
-              <Layer
-                {...(index === 0 ? primaryRouteLayer : alternativeRouteLayer)}
-                id={`route-layer-${index}`}
-              />
+              <Layer {...getRouteLayerStyle(index, highlightedRoute)} />
             </Source>
           ))}
         </Map>
@@ -205,11 +300,14 @@ export default function MapDisplay() {
       <div style={{ marginTop: 16, maxWidth: "900px" }}>
         <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
           <button
-            onClick={fetchRoute}
-            disabled={!start || !end || loading}
+            onClick={() => fetchRoute()}
+            disabled={!startPoint || !endPoint || loading}
             style={{
               padding: "8px 14px",
-              cursor: !start || !end || loading ? "not-allowed" : "pointer",
+              cursor:
+                !startPoint || !endPoint || loading
+                  ? "not-allowed"
+                  : "pointer",
             }}
           >
             {loading ? "Loading..." : "Compute route"}
@@ -228,72 +326,25 @@ export default function MapDisplay() {
 
         <p>
           <strong>Start:</strong>{" "}
-          {start ? `${start.lng.toFixed(5)}, ${start.lat.toFixed(5)}` : "Not set"}
+          {startPoint
+            ? `${startPoint.lng.toFixed(5)}, ${startPoint.lat.toFixed(5)}`
+            : "Not set"}
         </p>
         <p>
           <strong>End:</strong>{" "}
-          {end ? `${end.lng.toFixed(5)}, ${end.lat.toFixed(5)}` : "Not set"}
+          {endPoint
+            ? `${endPoint.lng.toFixed(5)}, ${endPoint.lat.toFixed(5)}`
+            : "Not set"}
         </p>
 
-        {routesInfo.length === 1 && (
-          <p style={{ marginTop: 12, color: "#666" }}>
-            Only one feasible route returned for this OD pair.
+        <p>
+          <strong>Status:</strong> {status}
+        </p>
+
+        {highlightedRoute != null && routesInfo?.[highlightedRoute] && (
+          <p style={{ color: "#374151", marginTop: 8 }}>
+            <strong>Highlighted:</strong> {routesInfo[highlightedRoute].name}
           </p>
-        )}
-
-        {routesInfo.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <h3 style={{ marginBottom: 12 }}>Route comparison</h3>
-
-            {routesInfo.map((route, index) => (
-              <div
-                key={route.id}
-                style={{
-                  marginBottom: 12,
-                  padding: 12,
-                  border: "1px solid #d1d5db",
-                  borderRadius: 8,
-                  background: index === 0 ? "#eff6ff" : "#f9fafb",
-                }}
-              >
-                <p style={{ margin: "0 0 8px 0" }}>
-                  <strong>Route {String.fromCharCode(65 + index)}</strong>
-                </p>
-
-                <p style={{ margin: "4px 0" }}>
-                  <strong>Distance:</strong>{" "}
-                  {route.distance
-                    ? `${(route.distance / 1000).toFixed(2)} km`
-                    : "N/A"}
-                </p>
-
-                <p style={{ margin: "4px 0" }}>
-                  <strong>Duration:</strong>{" "}
-                  {route.duration
-                    ? `${(route.duration / 60).toFixed(1)} min`
-                    : "N/A"}
-                </p>
-
-                {index > 0 &&
-                  routesInfo[0]?.duration != null &&
-                  route.duration != null && (
-                    <p style={{ margin: "4px 0" }}>
-                      <strong>Δtime vs A:</strong>{" "}
-                      {((route.duration - routesInfo[0].duration) / 60).toFixed(1)} min
-                    </p>
-                  )}
-
-                {index > 0 &&
-                  routesInfo[0]?.distance != null &&
-                  route.distance != null && (
-                    <p style={{ margin: "4px 0" }}>
-                      <strong>Δdistance vs A:</strong>{" "}
-                      {((route.distance - routesInfo[0].distance) / 1000).toFixed(2)} km
-                    </p>
-                  )}
-              </div>
-            ))}
-          </div>
         )}
       </div>
     </div>
