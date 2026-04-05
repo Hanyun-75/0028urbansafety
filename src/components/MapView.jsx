@@ -1,8 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Map, { Marker, Source, Layer } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadLAEIData, scoreRoute } from "../utils/pollution";
+import { scoreRouteNoise } from "../utils/noise";
+import NoisePollutionLayer from "./NoisePollutionLayer";
+import NoiseLegend from "./NoiseLegend";
 
 const SIMPLE_RASTER_STYLE = {
   version: 8,
@@ -64,6 +67,9 @@ export default function MapView({
   setStartQuery,
   setEndQuery,
 }) {
+  const [showNoise, setShowNoise] = useState(false);
+  const [noiseOpacity, setNoiseOpacity] = useState(0.55);
+
   const clearRouteResults = () => {
     setRoutesGeojson(null);
     setRoutesInfo([]);
@@ -165,8 +171,8 @@ export default function MapView({
       const data = await res.json();
       setRoutesGeojson(data);
 
-      const parsedRoutes =
-        data?.features?.map((feature, index) => {
+      const parsedRoutes = await Promise.all(
+        (data?.features ?? []).map(async (feature, index) => {
           const props = feature?.properties || {};
 
           const distance =
@@ -181,7 +187,9 @@ export default function MapView({
             props.duration ??
             null;
 
-          const pollutionResult = scoreRoute(feature?.geometry?.coordinates || []);
+          const coords = feature?.geometry?.coordinates || [];
+          const pollutionResult = scoreRoute(coords);
+          const noiseResult = await scoreRouteNoise(coords);
 
           return {
             id: index,
@@ -194,9 +202,12 @@ export default function MapView({
             avgNO2: pollutionResult?.avgNO2 ?? null,
             avgPM25: pollutionResult?.avgPM25 ?? null,
             dataCoverage: pollutionResult?.dataCoverage ?? null,
+            avgNoise: noiseResult?.avgNoise ?? null,
+            dangerPct: noiseResult?.dangerPct ?? null,
             geometry: feature?.geometry ?? null,
           };
-        }) || [];
+        })
+      );
 
       setRoutesInfo(parsedRoutes);
       setStatus?.("done");
@@ -248,6 +259,7 @@ export default function MapView({
 
       <div
         style={{
+          position: "relative",
           width: "100%",
           maxWidth: "900px",
           height: "550px",
@@ -284,6 +296,8 @@ export default function MapView({
             />
           )}
 
+          {showNoise && <NoisePollutionLayer opacity={noiseOpacity} />}
+
           {routesGeojson?.features?.map((feature, index) => (
             <Source
               key={`route-src-${index}`}
@@ -295,6 +309,24 @@ export default function MapView({
             </Source>
           ))}
         </Map>
+
+        {/* Noise legend panel — bottom-right inside the map container */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 28,
+            right: 12,
+            zIndex: 10,
+            pointerEvents: "auto",
+          }}
+        >
+          <NoiseLegend
+            show={showNoise}
+            onToggle={() => setShowNoise((v) => !v)}
+            opacity={noiseOpacity}
+            onOpacityChange={setNoiseOpacity}
+          />
+        </div>
       </div>
 
       <div style={{ marginTop: 16, maxWidth: "900px" }}>

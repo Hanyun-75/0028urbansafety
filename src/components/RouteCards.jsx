@@ -79,6 +79,33 @@ export default function RouteCards({ routes = [], onHighlight }) {
                 LAEI data coverage: {route.dataCoverage}%
               </div>
             )}
+
+            {route.avgNoise != null && (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+                <span
+                  style={{
+                    background: route.avgNoise >= 70 ? "#fee2e2" : "#f0fdf4",
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    fontSize: 13,
+                  }}
+                >
+                  🔊 Noise avg: <strong>{route.avgNoise}</strong> dB
+                </span>
+                {route.dangerPct != null && route.dangerPct > 0 && (
+                  <span
+                    style={{
+                      background: "#fee2e2",
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      fontSize: 13,
+                    }}
+                  >
+                    ≥75 dB: <strong>{route.dangerPct}%</strong> of route
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
