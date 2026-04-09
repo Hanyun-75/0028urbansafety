@@ -7,6 +7,7 @@ export default function App() {
   const [routesInfo, setRoutesInfo] = useState([]);
   const [loading, setLoading] = useState(false);
   const [highlightedRoute, setHighlightedRoute] = useState(null);
+  const [hoveredRoute, setHoveredRoute] = useState(null);
   const [status, setStatus] = useState("idle");
   const [quickPickRequest, setQuickPickRequest] = useState(null);
 
@@ -61,6 +62,7 @@ export default function App() {
   setLoading={setLoading}
   highlightedRoute={highlightedRoute}
   setHighlightedRoute={setHighlightedRoute}
+  hoveredRoute={hoveredRoute}
   status={status}
   setStatus={setStatus}
   quickPickRequest={quickPickRequest}
@@ -76,6 +78,8 @@ export default function App() {
         status={status}
         routes={routesInfo}
         onHighlight={setHighlightedRoute}
+        hoveredRoute={hoveredRoute}
+        onHover={setHoveredRoute}
         onQuickPick={handleQuickPick}
         startQuery={startQuery}
         endQuery={endQuery}

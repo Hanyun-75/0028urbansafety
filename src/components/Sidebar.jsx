@@ -12,6 +12,8 @@ export default function Sidebar({
   status,
   routes,
   onHighlight,
+  hoveredRoute,
+  onHover,
   onQuickPick,
   startQuery,
   endQuery,
@@ -80,7 +82,14 @@ export default function Sidebar({
       <div style={{ marginTop: 18 }}>
         {status === "loading" && <p>Finding routes and analysing air quality...</p>}
         {status === "error" && <p style={{ color: "#b91c1c" }}>Failed to calculate routes.</p>}
-        {status === "done" && <RouteCards routes={routes} onHighlight={onHighlight} />}
+        {status === "done" && (
+          <RouteCards
+            routes={routes}
+            onHighlight={onHighlight}
+            hoveredRoute={hoveredRoute}
+            onHover={onHover}
+          />
+        )}
       </div>
 
       <div style={{ marginTop: 18 }}>

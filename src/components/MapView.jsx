@@ -28,22 +28,30 @@ const SIMPLE_RASTER_STYLE = {
   ],
 };
 
-function getRouteLayerStyle(index, highlightedRoute) {
+function getRouteLayerStyle(index, highlightedRoute, hoveredRoute) {
   const isHighlighted = highlightedRoute === index;
+  const isHovered = hoveredRoute === index && highlightedRoute !== index;
   const isPrimary = index === 0;
+
+  let color, width, opacity;
+  if (isHighlighted) {
+    color = "#dc2626"; width = 7; opacity = 0.95;
+  } else if (isHovered) {
+    color = "#f59e0b"; width = 6; opacity = 0.9;
+  } else if (isPrimary) {
+    color = "#1d4ed8"; width = 5; opacity = 0.85;
+  } else {
+    color = "#6b7280"; width = 3; opacity = 0.85;
+  }
 
   return {
     id: `route-layer-${index}`,
     type: "line",
     paint: {
-      "line-color": isHighlighted
-        ? "#dc2626"
-        : isPrimary
-        ? "#1d4ed8"
-        : "#6b7280",
-      "line-width": isHighlighted ? 7 : isPrimary ? 5 : 3,
-      "line-opacity": isHighlighted ? 0.95 : 0.85,
-      "line-dasharray": isPrimary ? [1, 0] : [2, 2],
+      "line-color": color,
+      "line-width": width,
+      "line-opacity": opacity,
+      "line-dasharray": isPrimary || isHighlighted || isHovered ? [1, 0] : [2, 2],
     },
   };
 }
@@ -57,6 +65,7 @@ export default function MapView({
   setLoading,
   highlightedRoute,
   setHighlightedRoute,
+  hoveredRoute,
   status,
   setStatus,
   quickPickRequest,
@@ -305,7 +314,7 @@ export default function MapView({
               type="geojson"
               data={feature}
             >
-              <Layer {...getRouteLayerStyle(index, highlightedRoute)} />
+              <Layer {...getRouteLayerStyle(index, highlightedRoute, hoveredRoute)} />
             </Source>
           ))}
         </Map>
