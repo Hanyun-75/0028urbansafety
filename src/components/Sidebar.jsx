@@ -8,12 +8,15 @@ const QUICK_PICKS = [
   { label: "Russell Sq → UCL", start: [51.5215, -0.127], end: [51.5248, -0.134] },
 ];
 
+function Divider() {
+  return <div style={{ height: 1, background: "#f1f5f9", margin: "16px 0" }} />;
+}
+
 export default function Sidebar({
   status,
+  loading,
   routes,
   onHighlight,
-  hoveredRoute,
-  onHover,
   onQuickPick,
   startQuery,
   endQuery,
@@ -24,53 +27,62 @@ export default function Sidebar({
 }) {
   return (
     <aside
+      aria-label="Route planner"
       style={{
-        width: 360,
+        width: 380,
         flexShrink: 0,
-        padding: 16,
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        background: "#fafafa",
+        display: "flex",
+        flexDirection: "column",
+        background: "white",
+        borderLeft: "1px solid #e2e8f0",
+        overflowY: "auto",
       }}
     >
-      <h2 style={{ marginTop: 0 }}>How to use</h2>
+      {/* Search section */}
+      <div style={{ padding: "16px 20px" }}>
+        <p style={{ fontSize: 13, color: "#64748b", marginBottom: 14 }}>
+          Search or click the map to set start and end points, then compute routes.
+        </p>
 
-      <ol style={{ paddingLeft: 20, color: "#374151" }}>
-        <li>Search place names, or click on the map to set a start point.</li>
-        <li>Search again, or click again to set an end point.</li>
-        <li>Compute routes and compare NO₂ / PM2.5 exposure.</li>
-      </ol>
+        <SearchBox
+          label="Start"
+          placeholder="Search a start location"
+          value={startQuery}
+          onChange={setStartQuery}
+          onSelect={onSelectStart}
+        />
 
-      <SearchBox
-        label="Start"
-        placeholder="Search a start place"
-        value={startQuery}
-        onChange={setStartQuery}
-        onSelect={onSelectStart}
-      />
+        <SearchBox
+          label="End"
+          placeholder="Search an end location"
+          value={endQuery}
+          onChange={setEndQuery}
+          onSelect={onSelectEnd}
+        />
+      </div>
 
-      <SearchBox
-        label="End"
-        placeholder="Search an end place"
-        value={endQuery}
-        onChange={setEndQuery}
-        onSelect={onSelectEnd}
-      />
+      <Divider />
 
-      <div style={{ marginTop: 12 }}>
-        <p style={{ marginBottom: 8, fontWeight: 600 }}>Quick picks (UCL area)</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Quick picks */}
+      <div style={{ padding: "0 20px 16px" }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+          Try a demo route
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {QUICK_PICKS.map((qp, i) => (
             <button
               key={i}
               onClick={() => onQuickPick(qp.start, qp.end)}
               style={{
-                padding: "10px 12px",
-                border: "1px solid #e5e7eb",
+                padding: "9px 12px",
+                border: "1px solid #e2e8f0",
                 borderRadius: 8,
-                background: "white",
+                background: "#f8fafc",
                 cursor: "pointer",
                 textAlign: "left",
+                fontSize: 13,
+                color: "#374151",
+                fontWeight: 500,
               }}
             >
               {qp.label}
@@ -79,25 +91,56 @@ export default function Sidebar({
         </div>
       </div>
 
-      <div style={{ marginTop: 18 }}>
-        {status === "loading" && <p>Finding routes and analysing air quality...</p>}
-        {status === "error" && <p style={{ color: "#b91c1c" }}>Failed to calculate routes.</p>}
-        {status === "done" && (
-          <RouteCards
-            routes={routes}
-            onHighlight={onHighlight}
-            hoveredRoute={hoveredRoute}
-            onHover={onHover}
-          />
+      <Divider />
+
+      {/* Results */}
+      <div style={{ padding: "0 20px", flex: 1 }}>
+        {status === "idle" && !routes.length && (
+          <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>
+            Set a start and end point to see route options.
+          </p>
+        )}
+
+        {status === "loading" && (
+          <div style={{ textAlign: "center", padding: "28px 0", color: "#64748b" }}>
+            <div style={{ fontSize: 22, marginBottom: 8 }}>🔍</div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Finding routes…</div>
+            <div style={{ fontSize: 13 }}>Analysing air quality &amp; noise</div>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div style={{
+            padding: "12px 14px",
+            borderRadius: 8,
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            color: "#dc2626",
+            fontSize: 14,
+          }}>
+            Could not calculate routes. Please check your connection and try again.
+          </div>
+        )}
+
+        {status === "done" && routes.length > 0 && (
+          <RouteCards routes={routes} onHighlight={onHighlight} />
         )}
       </div>
 
-      <div style={{ marginTop: 18 }}>
+      {/* Footer */}
+      <Divider />
+
+      {/* Feedback */}
+      <div style={{ padding: "0 20px 16px" }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+          Leave feedback
+        </p>
         <Feedback />
       </div>
 
-      <div style={{ marginTop: 18, fontSize: 13, color: "#6b7280" }}>
-        Data: LAEI 2022 | Routing: ORS / OSRM | Map: OpenStreetMap
+      {/* Attribution */}
+      <div style={{ padding: "10px 20px 16px", fontSize: 11, color: "#cbd5e1" }}>
+        Air quality: LAEI 2022 &nbsp;·&nbsp; Routing: ORS &nbsp;·&nbsp; Map: OpenStreetMap
       </div>
     </aside>
   );

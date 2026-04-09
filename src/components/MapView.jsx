@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadLAEIData, scoreRoute } from "../utils/pollution";
 import { scoreRouteNoise } from "../utils/noise";
+import { ROUTE_COLORS } from "../utils/routeColors";
 import NoisePollutionLayer from "./NoisePollutionLayer";
 import NoiseLegend from "./NoiseLegend";
 
@@ -28,30 +29,20 @@ const SIMPLE_RASTER_STYLE = {
   ],
 };
 
-function getRouteLayerStyle(index, highlightedRoute, hoveredRoute) {
+function getRouteLayerStyle(index, highlightedRoute) {
   const isHighlighted = highlightedRoute === index;
-  const isHovered = hoveredRoute === index && highlightedRoute !== index;
-  const isPrimary = index === 0;
-
-  let color, width, opacity;
-  if (isHighlighted) {
-    color = "#dc2626"; width = 7; opacity = 0.95;
-  } else if (isHovered) {
-    color = "#f59e0b"; width = 6; opacity = 0.9;
-  } else if (isPrimary) {
-    color = "#1d4ed8"; width = 5; opacity = 0.85;
-  } else {
-    color = "#6b7280"; width = 3; opacity = 0.85;
-  }
+  const hasSelection = highlightedRoute !== null;
+  const isDimmed = hasSelection && !isHighlighted;
+  const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
 
   return {
     id: `route-layer-${index}`,
     type: "line",
     paint: {
       "line-color": color,
-      "line-width": width,
-      "line-opacity": opacity,
-      "line-dasharray": isPrimary || isHighlighted || isHovered ? [1, 0] : [2, 2],
+      "line-width": isHighlighted ? 7 : 4,
+      "line-opacity": isDimmed ? 0.15 : 0.85,
+      "line-dasharray": [1, 0],
     },
   };
 }
@@ -65,7 +56,6 @@ export default function MapView({
   setLoading,
   highlightedRoute,
   setHighlightedRoute,
-  hoveredRoute,
   status,
   setStatus,
   quickPickRequest,
@@ -173,9 +163,7 @@ export default function MapView({
         }
       );
 
-      if (!res.ok) {
-        throw new Error(`ORS request failed: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`ORS request failed: ${res.status}`);
 
       const data = await res.json();
       setRoutesGeojson(data);
@@ -235,16 +223,8 @@ export default function MapView({
     const [startLat, startLng] = quickPickRequest.start;
     const [endLat, endLng] = quickPickRequest.end;
 
-    const nextStart = {
-      lat: startLat,
-      lng: startLng,
-      label: "Quick pick start",
-    };
-    const nextEnd = {
-      lat: endLat,
-      lng: endLng,
-      label: "Quick pick end",
-    };
+    const nextStart = { lat: startLat, lng: startLng, label: "Quick pick start" };
+    const nextEnd = { lat: endLat, lng: endLng, label: "Quick pick end" };
 
     setStartPoint(nextStart);
     setEndPoint(nextEnd);
@@ -258,51 +238,24 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickPickRequest]);
 
-  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <h1 style={{ marginBottom: 8 }}>Urban Safety Walk</h1>
-      <p style={{ marginTop: 0, color: "#555" }}>
-        Search place names or click the map to set a start and end point, then
-        compute routes.
-      </p>
+  const canCompute = startPoint && endPoint && !loading;
 
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: "900px",
-          height: "550px",
-          border: "2px solid #cbd5e1",
-          borderRadius: "8px",
-          overflow: "hidden",
-          background: "#eee",
-        }}
-      >
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      {/* Map fills all available height */}
+      <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
         <Map
           mapLib={maplibregl}
-          initialViewState={{
-            longitude: -0.1276,
-            latitude: 51.5072,
-            zoom: 12,
-          }}
+          initialViewState={{ longitude: -0.1276, latitude: 51.5072, zoom: 12 }}
           mapStyle={SIMPLE_RASTER_STYLE}
           style={{ width: "100%", height: "100%" }}
           onClick={handleMapClick}
         >
           {startPoint && (
-            <Marker
-              longitude={startPoint.lng}
-              latitude={startPoint.lat}
-              color="green"
-            />
+            <Marker longitude={startPoint.lng} latitude={startPoint.lat} color="#16a34a" />
           )}
-
           {endPoint && (
-            <Marker
-              longitude={endPoint.lng}
-              latitude={endPoint.lat}
-              color="red"
-            />
+            <Marker longitude={endPoint.lng} latitude={endPoint.lat} color="#dc2626" />
           )}
 
           {showNoise && <NoisePollutionLayer opacity={noiseOpacity} />}
@@ -314,21 +267,13 @@ export default function MapView({
               type="geojson"
               data={feature}
             >
-              <Layer {...getRouteLayerStyle(index, highlightedRoute, hoveredRoute)} />
+              <Layer {...getRouteLayerStyle(index, highlightedRoute)} />
             </Source>
           ))}
         </Map>
 
-        {/* Noise legend panel — bottom-right inside the map container */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 28,
-            right: 12,
-            zIndex: 10,
-            pointerEvents: "auto",
-          }}
-        >
+        {/* Noise legend */}
+        <div style={{ position: "absolute", bottom: 24, right: 12, zIndex: 10 }}>
           <NoiseLegend
             show={showNoise}
             onToggle={() => setShowNoise((v) => !v)}
@@ -336,56 +281,106 @@ export default function MapView({
             onOpacityChange={setNoiseOpacity}
           />
         </div>
+
+        {/* Click hint when no points set */}
+        {!startPoint && (
+          <div style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(30,41,59,0.85)",
+            color: "white",
+            fontSize: 13,
+            padding: "6px 14px",
+            borderRadius: 20,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}>
+            Click on the map to set a start point
+          </div>
+        )}
+        {startPoint && !endPoint && (
+          <div style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(30,41,59,0.85)",
+            color: "white",
+            fontSize: 13,
+            padding: "6px 14px",
+            borderRadius: 20,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}>
+            Now click to set an end point
+          </div>
+        )}
       </div>
 
-      <div style={{ marginTop: 16, maxWidth: "900px" }}>
-        <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-          <button
-            onClick={() => fetchRoute()}
-            disabled={!startPoint || !endPoint || loading}
-            style={{
-              padding: "8px 14px",
-              cursor:
-                !startPoint || !endPoint || loading
-                  ? "not-allowed"
-                  : "pointer",
-            }}
-          >
-            {loading ? "Loading..." : "Compute route"}
-          </button>
+      {/* Controls bar */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "10px 16px",
+        background: "white",
+        borderTop: "1px solid #e2e8f0",
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={() => fetchRoute()}
+          disabled={!canCompute}
+          aria-label="Compute walking routes"
+          style={{
+            padding: "8px 20px",
+            background: canCompute ? "#2563eb" : "#e2e8f0",
+            color: canCompute ? "white" : "#94a3b8",
+            border: "none",
+            borderRadius: 8,
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: canCompute ? "pointer" : "not-allowed",
+          }}
+        >
+          {loading ? "Calculating…" : "Compute routes"}
+        </button>
 
-          <button
-            onClick={resetAll}
-            style={{
-              padding: "8px 14px",
-              cursor: "pointer",
-            }}
-          >
-            Reset
-          </button>
-        </div>
+        <button
+          onClick={resetAll}
+          aria-label="Reset map"
+          style={{
+            padding: "8px 16px",
+            background: "white",
+            color: "#374151",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            fontSize: 14,
+          }}
+        >
+          Reset
+        </button>
 
-        <p>
-          <strong>Start:</strong>{" "}
-          {startPoint
-            ? `${startPoint.lng.toFixed(5)}, ${startPoint.lat.toFixed(5)}`
-            : "Not set"}
-        </p>
-        <p>
-          <strong>End:</strong>{" "}
-          {endPoint
-            ? `${endPoint.lng.toFixed(5)}, ${endPoint.lat.toFixed(5)}`
-            : "Not set"}
-        </p>
-
-        <p>
-          <strong>Status:</strong> {status}
-        </p>
-
-        {highlightedRoute != null && routesInfo?.[highlightedRoute] && (
-          <p style={{ color: "#374151", marginTop: 8 }}>
-            <strong>Highlighted:</strong> {routesInfo[highlightedRoute].name}
-          </p>
+        {/* Route colour legend */}
+        {routesGeojson?.features?.length > 0 && (
+          <div style={{ display: "flex", gap: 12, marginLeft: 8 }}>
+            {routesGeojson.features.map((_, i) => (
+              <span
+                key={i}
+                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#374151" }}
+              >
+                <span style={{
+                  display: "inline-block",
+                  width: 20,
+                  height: 4,
+                  borderRadius: 2,
+                  background: ROUTE_COLORS[i % ROUTE_COLORS.length],
+                }} />
+                Route {String.fromCharCode(65 + i)}
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </div>

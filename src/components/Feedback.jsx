@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const STORAGE_KEY = 'cleanwalk_feedback';
 
@@ -15,11 +15,10 @@ function timeAgo(isoStr) {
   const diff = Date.now() - new Date(isoStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
-  if (mins < 60) return mins + ' min ago';
+  if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return hrs + ' hr ago';
-  const days = Math.floor(hrs / 24);
-  return days + ' day' + (days > 1 ? 's' : '') + ' ago';
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 export default function Feedback() {
@@ -27,12 +26,13 @@ export default function Feedback() {
   const [route, setRoute] = useState('');
   const [text, setText] = useState('');
   const [rating, setRating] = useState(0);
+  const [hovered, setHovered] = useState(0);
 
   const handleSubmit = () => {
     if (!route.trim() && !text.trim()) return;
     const updated = [
       { route: route.trim() || 'Unknown route', text: text.trim(), rating, time: new Date().toISOString() },
-      ...feedbackList
+      ...feedbackList,
     ];
     saveFeedback(updated);
     setFeedbackList(updated);
@@ -41,37 +41,122 @@ export default function Feedback() {
     setRating(0);
   };
 
+  const inputStyle = {
+    width: '100%',
+    padding: '8px 10px',
+    border: '1px solid #e2e8f0',
+    borderRadius: 7,
+    fontSize: 13,
+    color: '#1e293b',
+    background: '#f8fafc',
+    outline: 'none',
+    fontFamily: 'inherit',
+  };
+
   return (
-    <div className="panel-section">
-      <h2>Community Notes</h2>
-      <p className="feedback-info">Share your walking experience (stored locally for demo).</p>
-      <div className="feedback-form">
-        <input type="text" placeholder="Route or street name..." maxLength={50} value={route} onChange={e => setRoute(e.target.value)} />
-        <textarea placeholder="e.g. Tavistock Place is really pleasant, lots of trees..." maxLength={300} rows={2} value={text} onChange={e => setText(e.target.value)} />
-        <div className="feedback-rating">
-          <span>Air quality: </span>
-          {[1, 2, 3, 4, 5].map(v => (
-            <button key={v} className={`star${v <= rating ? ' active' : ''}`} onClick={() => setRating(v)}>
-              {v <= rating ? '\u2605' : '\u2606'}
-            </button>
+    <div>
+      {/* Form */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        <input
+          type="text"
+          placeholder="Route or street name"
+          maxLength={50}
+          value={route}
+          onChange={e => setRoute(e.target.value)}
+          style={inputStyle}
+          aria-label="Route or street name"
+        />
+        <textarea
+          placeholder="Share your experience…"
+          maxLength={300}
+          rows={2}
+          value={text}
+          onChange={e => setText(e.target.value)}
+          style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+          aria-label="Your experience"
+        />
+
+        {/* Star rating */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, color: '#64748b' }}>Air quality</span>
+          <div
+            style={{ display: 'flex', gap: 2 }}
+            role="group"
+            aria-label="Rate air quality"
+            onMouseLeave={() => setHovered(0)}
+          >
+            {[1, 2, 3, 4, 5].map(v => (
+              <button
+                key={v}
+                onClick={() => setRating(v)}
+                onMouseEnter={() => setHovered(v)}
+                aria-label={`${v} star${v > 1 ? 's' : ''}`}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '2px',
+                  fontSize: 18,
+                  cursor: 'pointer',
+                  color: v <= (hovered || rating) ? '#f59e0b' : '#cbd5e1',
+                  lineHeight: 1,
+                  transition: 'color 0.1s',
+                }}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={!route.trim() && !text.trim()}
+          style={{
+            padding: '8px',
+            background: (route.trim() || text.trim()) ? '#2563eb' : '#e2e8f0',
+            color: (route.trim() || text.trim()) ? 'white' : '#94a3b8',
+            border: 'none',
+            borderRadius: 7,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: (route.trim() || text.trim()) ? 'pointer' : 'not-allowed',
+            transition: 'background 0.15s',
+          }}
+        >
+          Submit
+        </button>
+      </div>
+
+      {/* Notes list */}
+      {feedbackList.length === 0 ? (
+        <p style={{ fontSize: 12, color: '#cbd5e1', textAlign: 'center', padding: '8px 0' }}>
+          No notes yet — be the first!
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {feedbackList.slice(0, 10).map((fb, i) => (
+            <div key={i} style={{
+              padding: '9px 11px',
+              background: '#f8fafc',
+              borderRadius: 8,
+              border: '1px solid #f1f5f9',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{fb.route}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{timeAgo(fb.time)}</span>
+              </div>
+              {fb.rating > 0 && (
+                <div style={{ fontSize: 13, color: '#f59e0b', marginBottom: fb.text ? 3 : 0, letterSpacing: 1 }}>
+                  {'★'.repeat(fb.rating)}{'☆'.repeat(5 - fb.rating)}
+                </div>
+              )}
+              {fb.text && (
+                <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{fb.text}</p>
+              )}
+            </div>
           ))}
         </div>
-        <button className="btn-submit" onClick={handleSubmit}>Submit Note</button>
-      </div>
-      <div className="feedback-list">
-        {feedbackList.length === 0 ? (
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No notes yet. Be the first!</p>
-        ) : (
-          feedbackList.slice(0, 10).map((fb, i) => (
-            <div key={i} className="feedback-item">
-              <div className="fb-route">{fb.route}</div>
-              <div className="fb-stars">{'\u2605'.repeat(fb.rating)}{'\u2606'.repeat(5 - fb.rating)}</div>
-              {fb.text && <div className="fb-text">{fb.text}</div>}
-              <div className="fb-time">{timeAgo(fb.time)}</div>
-            </div>
-          ))
-        )}
-      </div>
+      )}
     </div>
   );
 }
