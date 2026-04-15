@@ -38,6 +38,25 @@ export default function App() {
     setStatus("idle");
   };
 
+  const handleLoadFavorite = (start, end, savedRoute = null) => {
+    setStartPoint(start);
+    setEndPoint(end);
+    setStartQuery(start.label);
+    setEndQuery(end.label);
+    if (savedRoute) {
+      setRoutesGeojson({ type: "FeatureCollection", features: [savedRoute.geojsonFeature] });
+      setRoutesInfo([{ ...savedRoute.info, originalIndex: 0 }]);
+      setHighlightedRoute(null);
+      setStatus("done");
+    } else {
+      setQuickPickRequest({ start: [start.lat, start.lng], end: [end.lat, end.lng], timestamp: Date.now() });
+    }
+  };
+
+  const selectedRoute = highlightedRoute != null && routesGeojson?.features?.[highlightedRoute]
+    ? { geojsonFeature: routesGeojson.features[highlightedRoute], info: routesInfo[highlightedRoute] }
+    : null;
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -79,6 +98,10 @@ export default function App() {
           setEndQuery={setEndQuery}
           onSelectStart={handleSelectStart}
           onSelectEnd={handleSelectEnd}
+          startPoint={startPoint}
+          endPoint={endPoint}
+          onLoadFavorite={handleLoadFavorite}
+          selectedRoute={selectedRoute}
         />
       </div>
     </div>

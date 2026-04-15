@@ -1,6 +1,7 @@
 import SearchBox from "./SearchBox";
 import RouteCards from "./RouteCards";
 import Feedback from "./Feedback";
+import Favorites from "./Favorites";
 
 const QUICK_PICKS = [
   { label: "King's Cross → UCL", start: [51.53, -0.123], end: [51.5248, -0.134] },
@@ -24,6 +25,10 @@ export default function Sidebar({
   setEndQuery,
   onSelectStart,
   onSelectEnd,
+  startPoint,
+  endPoint,
+  onLoadFavorite,
+  selectedRoute,
 }) {
   return (
     <aside
@@ -89,6 +94,18 @@ export default function Sidebar({
             </button>
           ))}
         </div>
+      </div>
+
+      <Divider />
+
+      {/* Saved routes */}
+      <div style={{ padding: "0 20px 16px" }}>
+        <Favorites
+          startPoint={startPoint}
+          endPoint={endPoint}
+          onLoad={onLoadFavorite}
+          selectedRoute={selectedRoute}
+        />
       </div>
 
       <Divider />

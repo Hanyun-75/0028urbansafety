@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { ROUTE_COLORS } from "../utils/routeColors";
+import RouteDescription from "./RouteDescription";
 
 function formatDistance(meters) {
   if (meters == null) return "N/A";
@@ -225,6 +226,8 @@ export default function RouteCards({ routes = [], onHighlight }) {
                   Data coverage: {route.dataCoverage}%
                 </p>
               )}
+
+              <RouteDescription route={route} routes={routes} />
             </div>
           </div>
         );
