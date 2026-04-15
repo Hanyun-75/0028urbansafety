@@ -19,7 +19,7 @@ function getRange(routes, field) {
   return { min: Math.min(...vals), max: Math.max(...vals) };
 }
 
-// Green = best (low is good), red = worst
+// Green = best (low is good), red = worst，need change more
 function CompareBar({ value, min, max }) {
   if (value == null || min === max) return null;
   const pct = ((max - value) / (max - min)) * 100;
