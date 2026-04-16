@@ -30,33 +30,43 @@ async function queryNoiseAtPoint(lon, lat) {
   }
 }
 
+const NOISE_HIGH_THRESHOLD = 75; // dB — hearing damage risk (CDC/NIOSH)
+
 export async function scoreRouteNoise(coords) {
   if (!MAPBOX_TOKEN || !TILESET_ID || !Array.isArray(coords) || coords.length === 0) {
     return null;
   }
 
-  // Sample every 10th point to limit API calls (~20 requests per route)
-  const sampled = coords.filter(
-    (_, i) => i % 10 === 0 || i === coords.length - 1
-  );
+  const STEP = 10;
+  const sampleIndices = [];
+  for (let i = 0; i < coords.length; i += STEP) sampleIndices.push(i);
+  if ((coords.length - 1) % STEP !== 0) sampleIndices.push(coords.length - 1);
 
   const classes = await Promise.all(
-    sampled.map(([lon, lat]) => queryNoiseAtPoint(lon, lat))
+    sampleIndices.map((idx) => queryNoiseAtPoint(coords[idx][0], coords[idx][1]))
   );
 
-  const values = classes
-    .filter(Boolean)
-    .map((cls) => NOISE_CLASS_TO_DB[cls])
-    .filter((v) => v != null);
+  const dbValues = classes.map((cls) =>
+    cls ? (NOISE_CLASS_TO_DB[cls] ?? null) : null
+  );
 
-  if (values.length === 0) return null;
+  const validValues = dbValues.filter((v) => v != null);
+  if (validValues.length === 0) return null;
 
   const avgNoise = Number(
-    (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)
+    (validValues.reduce((a, b) => a + b, 0) / validValues.length).toFixed(1)
   );
   const dangerPct = Math.round(
-    (values.filter((v) => v >= 75).length / values.length) * 100
+    (validValues.filter((v) => v >= 75).length / validValues.length) * 100
   );
 
-  return { avgNoise, dangerPct };
+  // Collect every sampled point that exceeds the noise threshold
+  const highNoisePoints = [];
+  for (let s = 0; s < sampleIndices.length; s++) {
+    if (dbValues[s] != null && dbValues[s] >= NOISE_HIGH_THRESHOLD) {
+      highNoisePoints.push(coords[sampleIndices[s]]);
+    }
+  }
+
+  return { avgNoise, dangerPct, highNoisePoints };
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function SearchBox({
   label,
@@ -9,8 +9,16 @@ export default function SearchBox({
 }) {
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
+  const userTyping = useRef(false);
 
   useEffect(() => {
+    if (!userTyping.current) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
+    userTyping.current = false;
+
     if (!value || value.trim().length < 2) {
       setResults([]);
       return;
@@ -60,6 +68,11 @@ export default function SearchBox({
     };
   }, [value]);
 
+  const handleInput = (e) => {
+    userTyping.current = true;
+    onChange(e.target.value);
+  };
+
   return (
     <div style={{ marginBottom: 12, position: "relative" }}>
       <label
@@ -75,7 +88,7 @@ export default function SearchBox({
       <input
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleInput}
         placeholder={placeholder}
         style={{
           width: "100%",

@@ -33,31 +33,41 @@ function findNearestGridPoint(lon, lat, points) {
   return best;
 }
 
+const NO2_HIGH_THRESHOLD = 40;  // μg/m³ — EU/UK annual limit (Dir 2008/50/EC)
+const PM25_HIGH_THRESHOLD = 15; // μg/m³ — WHO 2021 AQG 24-hour guideline
+
 export function scoreRoute(coords) {
   if (!gridData || !Array.isArray(coords) || coords.length === 0) {
     return {
       avgNO2: null,
       avgPM25: null,
       dataCoverage: 0,
+      highPollutionPoints: [],
     };
   }
 
-  const sampledCoords = coords.filter(
-    (_, idx) => idx % 8 === 0 || idx === coords.length - 1
-  );
+  const STEP = 8;
+  const sampleIndices = [];
+  for (let i = 0; i < coords.length; i += STEP) sampleIndices.push(i);
+  if ((coords.length - 1) % STEP !== 0) sampleIndices.push(coords.length - 1);
 
   let no2Sum = 0;
   let pm25Sum = 0;
   let matched = 0;
+  const isHigh = [];
 
-  for (const coord of sampledCoords) {
-    const [lon, lat] = coord;
+  for (const idx of sampleIndices) {
+    const [lon, lat] = coords[idx];
     const nearest = findNearestGridPoint(lon, lat, gridData);
-
     if (nearest) {
-      no2Sum += Number(nearest.no2);
-      pm25Sum += Number(nearest.pm25);
+      const no2 = Number(nearest.no2);
+      const pm25 = Number(nearest.pm25);
+      no2Sum += no2;
+      pm25Sum += pm25;
       matched += 1;
+      isHigh.push(no2 > NO2_HIGH_THRESHOLD || pm25 > PM25_HIGH_THRESHOLD);
+    } else {
+      isHigh.push(false);
     }
   }
 
@@ -66,12 +76,20 @@ export function scoreRoute(coords) {
       avgNO2: null,
       avgPM25: null,
       dataCoverage: 0,
+      highPollutionPoints: [],
     };
+  }
+
+  // Collect every sampled point that exceeds thresholds
+  const highPollutionPoints = [];
+  for (let s = 0; s < sampleIndices.length; s++) {
+    if (isHigh[s]) highPollutionPoints.push(coords[sampleIndices[s]]);
   }
 
   return {
     avgNO2: Number((no2Sum / matched).toFixed(1)),
     avgPM25: Number((pm25Sum / matched).toFixed(1)),
-    dataCoverage: Math.round((matched / sampledCoords.length) * 100),
+    dataCoverage: Math.round((matched / sampleIndices.length) * 100),
+    highPollutionPoints,
   };
 }

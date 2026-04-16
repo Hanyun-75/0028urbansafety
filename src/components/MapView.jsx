@@ -40,11 +40,28 @@ function getRouteLayerStyle(index, highlightedRoute) {
     type: "line",
     paint: {
       "line-color": color,
-      "line-width": isHighlighted ? 7 : 4,
-      "line-opacity": isDimmed ? 0.15 : 0.85,
-      "line-dasharray": [1, 0],
+      "line-width": isHighlighted ? 6 : 3.5,
+      "line-opacity": isDimmed ? 0.2 : 0.9,
+      "line-dasharray": isHighlighted ? [1, 0] : [2, 2],
     },
   };
+}
+
+function pointsToGeoJSON(points) {
+  return {
+    type: "FeatureCollection",
+    features: points.map((coord) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: coord },
+    })),
+  };
+}
+
+function getRouteLabelPoint(feature) {
+  const coords = feature?.geometry?.coordinates;
+  if (!coords || coords.length === 0) return null;
+  const mid = Math.floor(coords.length / 2);
+  return coords[mid];
 }
 
 export default function MapView({
@@ -56,7 +73,6 @@ export default function MapView({
   setLoading,
   highlightedRoute,
   setHighlightedRoute,
-  status,
   setStatus,
   quickPickRequest,
   startPoint,
@@ -84,17 +100,38 @@ export default function MapView({
     setStatus?.("idle");
   };
 
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const url =
+        `https://nominatim.openstreetmap.org/reverse?` +
+        new URLSearchParams({ lat, lon: lng, format: "jsonv2", zoom: 18 }).toString();
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const addr = data.address || {};
+      return addr.road || addr.pedestrian || addr.footway || addr.neighbourhood || data.name || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setPointWithGeocode = (lat, lng, setPoint, setQuery) => {
+    const fallback = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    const point = { lat, lng, label: fallback };
+    setPoint(point);
+    setQuery?.(fallback);
+    reverseGeocode(lat, lng).then((name) => {
+      if (!name) return;
+      setPoint((prev) => prev && prev.lat === lat && prev.lng === lng ? { ...prev, label: name } : prev);
+      setQuery?.(name);
+    });
+  };
+
   const handleMapClick = (event) => {
     const { lng, lat } = event.lngLat;
 
     if (!startPoint) {
-      const nextStart = {
-        lat,
-        lng,
-        label: `Pinned start (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
-      };
-      setStartPoint(nextStart);
-      setStartQuery?.(nextStart.label);
+      setPointWithGeocode(lat, lng, setStartPoint, setStartQuery);
       setEndPoint(null);
       setEndQuery?.("");
       clearRouteResults();
@@ -103,25 +140,13 @@ export default function MapView({
     }
 
     if (!endPoint) {
-      const nextEnd = {
-        lat,
-        lng,
-        label: `Pinned end (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
-      };
-      setEndPoint(nextEnd);
-      setEndQuery?.(nextEnd.label);
+      setPointWithGeocode(lat, lng, setEndPoint, setEndQuery);
       setHighlightedRoute?.(null);
       setStatus?.("idle");
       return;
     }
 
-    const nextStart = {
-      lat,
-      lng,
-      label: `Pinned start (${lat.toFixed(5)}, ${lng.toFixed(5)})`,
-    };
-    setStartPoint(nextStart);
-    setStartQuery?.(nextStart.label);
+    setPointWithGeocode(lat, lng, setStartPoint, setStartQuery);
     setEndPoint(null);
     setEndQuery?.("");
     clearRouteResults();
@@ -202,6 +227,8 @@ export default function MapView({
             avgNoise: noiseResult?.avgNoise ?? null,
             dangerPct: noiseResult?.dangerPct ?? null,
             geometry: feature?.geometry ?? null,
+            highPollutionPoints: pollutionResult?.highPollutionPoints ?? [],
+            highNoisePoints: noiseResult?.highNoisePoints ?? [],
           };
         })
       );
@@ -223,18 +250,31 @@ export default function MapView({
     const [startLat, startLng] = quickPickRequest.start;
     const [endLat, endLng] = quickPickRequest.end;
 
-    const nextStart = { lat: startLat, lng: startLng, label: "Quick pick start" };
-    const nextEnd = { lat: endLat, lng: endLng, label: "Quick pick end" };
+    const startFallback = `${startLat.toFixed(4)}, ${startLng.toFixed(4)}`;
+    const endFallback = `${endLat.toFixed(4)}, ${endLng.toFixed(4)}`;
+    const nextStart = { lat: startLat, lng: startLng, label: startFallback };
+    const nextEnd = { lat: endLat, lng: endLng, label: endFallback };
 
     setStartPoint(nextStart);
     setEndPoint(nextEnd);
-    setStartQuery?.(nextStart.label);
-    setEndQuery?.(nextEnd.label);
+    setStartQuery?.(startFallback);
+    setEndQuery?.(endFallback);
 
     clearRouteResults();
     setStatus?.("idle");
 
     fetchRoute(nextStart, nextEnd);
+
+    reverseGeocode(startLat, startLng).then((name) => {
+      if (!name) return;
+      setStartPoint((prev) => prev && prev.lat === startLat ? { ...prev, label: name } : prev);
+      setStartQuery?.(name);
+    });
+    reverseGeocode(endLat, endLng).then((name) => {
+      if (!name) return;
+      setEndPoint((prev) => prev && prev.lat === endLat ? { ...prev, label: name } : prev);
+      setEndQuery?.(name);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickPickRequest]);
 
@@ -260,6 +300,7 @@ export default function MapView({
 
           {showNoise && <NoisePollutionLayer opacity={noiseOpacity} />}
 
+          {/* Route lines */}
           {routesGeojson?.features?.map((feature, index) => (
             <Source
               key={`route-src-${index}`}
@@ -270,6 +311,85 @@ export default function MapView({
               <Layer {...getRouteLayerStyle(index, highlightedRoute)} />
             </Source>
           ))}
+
+          {/* Hazard dots — on top of route lines */}
+          {routesInfo.map((route) => {
+            const idx = route.originalIndex;
+            const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
+            const pts = pointsToGeoJSON(route.highPollutionPoints || []);
+            return pts.features.length > 0 ? (
+              <Source key={`poll-pts-${idx}`} id={`poll-pts-${idx}`} type="geojson" data={pts}>
+                <Layer
+                  id={`poll-dots-${idx}`}
+                  type="circle"
+                  paint={{
+                    "circle-radius": 4.5,
+                    "circle-color": "#dc2626",
+                    "circle-opacity": dimmed ? 0.08 : 0.85,
+                    "circle-stroke-width": 1.5,
+                    "circle-stroke-color": "#ffffff",
+                    "circle-stroke-opacity": dimmed ? 0.08 : 0.9,
+                  }}
+                />
+              </Source>
+            ) : null;
+          })}
+          {routesInfo.map((route) => {
+            const idx = route.originalIndex;
+            const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
+            const pts = pointsToGeoJSON(route.highNoisePoints || []);
+            return pts.features.length > 0 ? (
+              <Source key={`noise-pts-${idx}`} id={`noise-pts-${idx}`} type="geojson" data={pts}>
+                <Layer
+                  id={`noise-dots-${idx}`}
+                  type="circle"
+                  paint={{
+                    "circle-radius": 3.5,
+                    "circle-color": "#f59e0b",
+                    "circle-opacity": dimmed ? 0.08 : 0.85,
+                    "circle-stroke-width": 1.5,
+                    "circle-stroke-color": "#ffffff",
+                    "circle-stroke-opacity": dimmed ? 0.08 : 0.9,
+                  }}
+                />
+              </Source>
+            ) : null;
+          })}
+
+          {/* Route labels A/B/C on map */}
+          {routesGeojson?.features?.map((feature, index) => {
+            const pt = getRouteLabelPoint(feature);
+            if (!pt) return null;
+            const isHidden = highlightedRoute !== null && highlightedRoute !== index;
+            return (
+              <Marker
+                key={`route-label-${index}`}
+                longitude={pt[0]}
+                latitude={pt[1]}
+                anchor="center"
+              >
+                <div style={{
+                  background: ROUTE_COLORS[index % ROUTE_COLORS.length],
+                  color: "white",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "2px solid white",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                  opacity: isHidden ? 0.15 : 1,
+                  transition: "opacity 0.2s",
+                  pointerEvents: "none",
+                }}>
+                  {String.fromCharCode(65 + index)}
+                </div>
+              </Marker>
+            );
+          })}
         </Map>
 
         {/* Noise legend */}
@@ -362,24 +482,41 @@ export default function MapView({
           Reset
         </button>
 
+        {/* Hazard legend */}
+        {routesGeojson?.features?.length > 0 && (
+          <div style={{ display: "flex", gap: 10, marginLeft: 8 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748b" }}>
+              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#dc2626", border: "1.5px solid white", boxShadow: "0 0 0 1px #d1d5db" }} />
+              NO₂{">"}40 or PM2.5{">"}15
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748b" }}>
+              <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#f59e0b", border: "1.5px solid white", boxShadow: "0 0 0 1px #d1d5db" }} />
+              Noise{"≥"}75 dB
+            </span>
+          </div>
+        )}
+
         {/* Route colour legend */}
         {routesGeojson?.features?.length > 0 && (
           <div style={{ display: "flex", gap: 12, marginLeft: 8 }}>
-            {routesGeojson.features.map((_, i) => (
-              <span
-                key={i}
-                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#374151" }}
-              >
-                <span style={{
-                  display: "inline-block",
-                  width: 20,
-                  height: 4,
-                  borderRadius: 2,
-                  background: ROUTE_COLORS[i % ROUTE_COLORS.length],
-                }} />
-                Route {String.fromCharCode(65 + i)}
-              </span>
-            ))}
+            {routesGeojson.features.map((_, i) => {
+              const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+              const isHL = highlightedRoute === i;
+              return (
+                <span
+                  key={i}
+                  style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#374151" }}
+                >
+                  <span style={{
+                    display: "inline-block",
+                    width: 20,
+                    height: 0,
+                    borderTop: isHL ? `3px solid ${color}` : `3px dashed ${color}`,
+                  }} />
+                  Route {String.fromCharCode(65 + i)}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>

@@ -4,8 +4,9 @@ import Feedback from "./Feedback";
 
 const QUICK_PICKS = [
   { label: "King's Cross → UCL", start: [51.53, -0.123], end: [51.5248, -0.134] },
-  { label: "Camden → UCL", start: [51.535, -0.125], end: [51.5248, -0.134] },
-  { label: "Russell Sq → UCL", start: [51.5215, -0.127], end: [51.5248, -0.134] },
+  { label: "King's Cross → IOE", start: [51.53, -0.123], end: [51.5228, -0.1288] },
+  { label: "Trafalgar Square → Museum", start: [51.508, -0.1281], end: [51.5194, -0.1270] },
+  { label: "West End → Art Gallery", start: [51.5136, -0.1365], end: [51.5089, -0.1283] },
 ];
 
 function Divider() {
@@ -14,7 +15,6 @@ function Divider() {
 
 export default function Sidebar({
   status,
-  loading,
   routes,
   onHighlight,
   onQuickPick,
@@ -38,6 +38,13 @@ export default function Sidebar({
         overflowY: "auto",
       }}
     >
+      {/* Prototype description */}
+      <div style={{ padding: "12px 20px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+        <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, margin: 0 }}>
+          For students and newcomers walking around central London, this prototype helps compare route trade-offs rather than giving a single &ldquo;best&rdquo; answer.
+        </p>
+      </div>
+
       {/* Search section */}
       <div style={{ padding: "16px 20px" }}>
         <p style={{ fontSize: 13, color: "#64748b", marginBottom: 14 }}>

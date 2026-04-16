@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { ROUTE_COLORS } from "../utils/routeColors";
 
 function formatDistance(meters) {
@@ -19,7 +19,6 @@ function getRange(routes, field) {
   return { min: Math.min(...vals), max: Math.max(...vals) };
 }
 
-// Green = best (low is good), red = worst，need change more
 function CompareBar({ value, min, max }) {
   if (value == null || min === max) return null;
   const pct = ((max - value) / (max - min)) * 100;
@@ -31,14 +30,70 @@ function CompareBar({ value, min, max }) {
   );
 }
 
-function computeScore(route, sortBy) {
-  if (sortBy === "distance") return route.distance ?? Infinity;
-  if (sortBy === "noise") return route.avgNoise ?? Infinity;
-  if (sortBy === "air") {
-    if (route.avgNO2 == null && route.avgPM25 == null) return Infinity;
-    return (route.avgNO2 ?? 50) * 0.6 + (route.avgPM25 ?? 10) * 0.4;
+function isUniqueMin(value, field, routes) {
+  if (value == null) return false;
+  const vals = routes.map((r) => r[field]).filter((v) => v != null);
+  const min = Math.min(...vals);
+  if (value !== min) return false;
+  return vals.filter((v) => v === min).length === 1;
+}
+
+function generateTags(route, routes) {
+  const tags = [];
+  if (routes.length < 2) return tags;
+
+  if (isUniqueMin(route.distance, "distance", routes)) tags.push("Shorter");
+  if (isUniqueMin(route.duration, "duration", routes) && !isUniqueMin(route.distance, "distance", routes)) tags.push("Faster");
+  if (isUniqueMin(route.avgNO2, "avgNO2", routes)) tags.push("Lower pollution");
+  if (isUniqueMin(route.avgNoise, "avgNoise", routes)) tags.push("Quieter");
+
+  return tags;
+}
+
+function generateSummary(route, routes) {
+  if (routes.length < 2) return null;
+  const parts = [];
+
+  const isShort = isUniqueMin(route.distance, "distance", routes);
+  const isClean = isUniqueMin(route.avgNO2, "avgNO2", routes);
+  const isQuiet = isUniqueMin(route.avgNoise, "avgNoise", routes);
+
+  const maxDist = Math.max(...routes.map((r) => r.distance ?? -Infinity));
+  const maxNO2 = Math.max(...routes.map((r) => r.avgNO2 ?? -Infinity));
+  const maxNoise = Math.max(...routes.map((r) => r.avgNoise ?? -Infinity));
+
+  const isLong = route.distance === maxDist && !isShort;
+  const isDirty = route.avgNO2 === maxNO2 && !isClean;
+  const isNoisy = route.avgNoise === maxNoise && !isQuiet;
+
+  if (isShort && isQuiet) {
+    parts.push("Shortest and quietest");
+  } else if (isShort && isClean) {
+    parts.push("Shortest with cleanest air");
+  } else if (isShort) {
+    parts.push("Shortest");
+    if (isNoisy) parts.push("but noisier");
+    else if (isDirty) parts.push("but higher pollution");
+  } else if (isClean && isQuiet) {
+    parts.push("Cleanest air and quietest");
+    if (isLong) parts.push("with a small detour");
+  } else if (isClean) {
+    parts.push("Lower NO\u2082");
+    if (isLong) parts.push("with a small detour");
+    else if (isNoisy) parts.push("but noisier");
+  } else if (isQuiet) {
+    parts.push("Quieter streets");
+    if (isLong) parts.push("with a longer walk");
+    else if (isDirty) parts.push("but higher pollution");
+  } else {
+    const durationMin = route.duration != null ? Math.round(route.duration / 60) : null;
+    if (durationMin != null) parts.push(`${durationMin} min`);
+    if (!isDirty && !isNoisy) parts.push("balanced trade-offs");
+    else if (isDirty) parts.push("higher pollution");
+    else if (isNoisy) parts.push("noisier streets");
   }
-  return 0;
+
+  return parts.join(", ");
 }
 
 const SORT_OPTIONS = [
@@ -50,11 +105,6 @@ const SORT_OPTIONS = [
 export default function RouteCards({ routes = [], onHighlight }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const [sortBy, setSortBy] = useState("air");
-
-  const sortedRoutes = useMemo(() => {
-    if (!routes.length) return [];
-    return [...routes].sort((a, b) => computeScore(a, sortBy) - computeScore(b, sortBy));
-  }, [routes, sortBy]);
 
   if (!routes.length) return null;
 
@@ -71,9 +121,9 @@ export default function RouteCards({ routes = [], onHighlight }) {
         </p>
       </div>
 
-      {/* Prioritise-by selector */}
+      {/* Choose what matters to you */}
       <div style={{ marginBottom: 14 }}>
-        <p style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Prioritise by</p>
+        <p style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Choose what matters to you</p>
         <div style={{ display: "flex", gap: 6 }} role="group" aria-label="Sort routes by">
           {SORT_OPTIONS.map((opt) => (
             <button
@@ -99,11 +149,12 @@ export default function RouteCards({ routes = [], onHighlight }) {
       </div>
 
       {/* Route cards */}
-      {sortedRoutes.map((route, displayIdx) => {
+      {routes.map((route) => {
         const origIdx = route.originalIndex ?? route.id ?? 0;
         const isActive = activeIndex === origIdx;
-        const isRecommended = displayIdx === 0;
         const routeColor = ROUTE_COLORS[origIdx % ROUTE_COLORS.length];
+        const tags = generateTags(route, routes);
+        const summary = generateSummary(route, routes);
 
         return (
           <div
@@ -111,7 +162,7 @@ export default function RouteCards({ routes = [], onHighlight }) {
             role="button"
             tabIndex={0}
             aria-pressed={isActive}
-            aria-label={`${route.name || `Route ${String.fromCharCode(65 + displayIdx)}`}${isRecommended ? ", recommended" : ""}`}
+            aria-label={route.name || `Route ${String.fromCharCode(65 + origIdx)}`}
             onClick={() => {
               setActiveIndex(origIdx);
               onHighlight?.(origIdx);
@@ -123,6 +174,8 @@ export default function RouteCards({ routes = [], onHighlight }) {
                 onHighlight?.(origIdx);
               }
             }}
+            onMouseEnter={() => onHighlight?.(origIdx)}
+            onMouseLeave={() => onHighlight?.(activeIndex)}
             style={{
               marginBottom: 10,
               borderRadius: 10,
@@ -139,32 +192,43 @@ export default function RouteCards({ routes = [], onHighlight }) {
 
             <div style={{ padding: "10px 14px" }}>
               {/* Header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
-                  {route.name || `Route ${String.fromCharCode(65 + displayIdx)}`}
+                  {route.name || `Route ${String.fromCharCode(65 + origIdx)}`}
                 </span>
-                <div style={{ display: "flex", gap: 5 }}>
-                  {isRecommended && (
-                    <span style={{
-                      background: "#dcfce7", color: "#15803d",
-                      fontSize: 11, fontWeight: 700,
+                {isActive && (
+                  <span style={{
+                    background: routeColor, color: "white",
+                    fontSize: 11, fontWeight: 600,
+                    padding: "2px 8px", borderRadius: 999,
+                  }}>
+                    Selected
+                  </span>
+                )}
+              </div>
+
+              {/* Dynamic tags */}
+              {tags.length > 0 && (
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
+                  {tags.map((tag) => (
+                    <span key={tag} style={{
+                      background: "#f0fdf4", color: "#15803d",
+                      fontSize: 11, fontWeight: 600,
                       padding: "2px 8px", borderRadius: 999,
                       border: "1px solid #bbf7d0",
                     }}>
-                      ★ Best
+                      {tag}
                     </span>
-                  )}
-                  {isActive && (
-                    <span style={{
-                      background: routeColor, color: "white",
-                      fontSize: 11, fontWeight: 600,
-                      padding: "2px 8px", borderRadius: 999,
-                    }}>
-                      Selected
-                    </span>
-                  )}
+                  ))}
                 </div>
-              </div>
+              )}
+
+              {/* Short summary */}
+              {summary && (
+                <p style={{ fontSize: 12, color: "#64748b", fontStyle: "italic", margin: "0 0 8px 0" }}>
+                  {summary}
+                </p>
+              )}
 
               {/* Distance + Duration */}
               <div style={{ display: "flex", gap: 16, marginBottom: 10, fontSize: 13, color: "#374151" }}>
@@ -201,8 +265,8 @@ export default function RouteCards({ routes = [], onHighlight }) {
                   </p>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <span style={{
-                      background: route.avgNoise >= 70 ? "#fef2f2" : "#f0fdf4",
-                      color: route.avgNoise >= 70 ? "#b91c1c" : "#15803d",
+                      background: route.avgNoise >= 75 ? "#fef2f2" : "#f0fdf4",
+                      color: route.avgNoise >= 75 ? "#b91c1c" : "#15803d",
                       padding: "3px 8px", borderRadius: 999, fontSize: 12,
                     }}>
                       🔊 <strong>{route.avgNoise}</strong> dB
