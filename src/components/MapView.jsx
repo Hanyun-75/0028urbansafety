@@ -29,11 +29,11 @@ const SIMPLE_RASTER_STYLE = {
   ],
 };
 
-function getRouteLayerStyle(index, highlightedRoute) {
+function getRouteLayerStyle(index, highlightedRoute, displayIdx) {
   const isHighlighted = highlightedRoute === index;
   const hasSelection = highlightedRoute !== null;
   const isDimmed = hasSelection && !isHighlighted;
-  const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
+  const color = ROUTE_COLORS[(displayIdx ?? index) % ROUTE_COLORS.length];
 
   return {
     id: `route-layer-${index}`,
@@ -81,6 +81,8 @@ export default function MapView({
   setEndPoint,
   setStartQuery,
   setEndQuery,
+  filterMode,
+  displayOrder,
 }) {
   const [showNoise, setShowNoise] = useState(false);
   const [noiseOpacity, setNoiseOpacity] = useState(0.55);
@@ -301,19 +303,22 @@ export default function MapView({
           {showNoise && <NoisePollutionLayer opacity={noiseOpacity} />}
 
           {/* Route lines */}
-          {routesGeojson?.features?.map((feature, index) => (
-            <Source
-              key={`route-src-${index}`}
-              id={`route-src-${index}`}
-              type="geojson"
-              data={feature}
-            >
-              <Layer {...getRouteLayerStyle(index, highlightedRoute)} />
-            </Source>
-          ))}
+          {routesGeojson?.features?.map((feature, index) => {
+            const dIdx = displayOrder?.[index] ?? index;
+            return (
+              <Source
+                key={`route-src-${index}`}
+                id={`route-src-${index}`}
+                type="geojson"
+                data={feature}
+              >
+                <Layer {...getRouteLayerStyle(index, highlightedRoute, dIdx)} />
+              </Source>
+            );
+          })}
 
-          {/* Hazard dots — on top of route lines */}
-          {routesInfo.map((route) => {
+          {/* Hazard dots — on top of route lines, filtered by mode */}
+          {(filterMode === "air" || filterMode === "overall") && routesInfo.map((route) => {
             const idx = route.originalIndex;
             const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
             const pts = pointsToGeoJSON(route.highPollutionPoints || []);
@@ -334,7 +339,7 @@ export default function MapView({
               </Source>
             ) : null;
           })}
-          {routesInfo.map((route) => {
+          {(filterMode === "noise" || filterMode === "overall") && routesInfo.map((route) => {
             const idx = route.originalIndex;
             const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
             const pts = pointsToGeoJSON(route.highNoisePoints || []);
@@ -360,6 +365,7 @@ export default function MapView({
           {routesGeojson?.features?.map((feature, index) => {
             const pt = getRouteLabelPoint(feature);
             if (!pt) return null;
+            const dIdx = displayOrder?.[index] ?? index;
             const isHidden = highlightedRoute !== null && highlightedRoute !== index;
             return (
               <Marker
@@ -369,7 +375,7 @@ export default function MapView({
                 anchor="center"
               >
                 <div style={{
-                  background: ROUTE_COLORS[index % ROUTE_COLORS.length],
+                  background: ROUTE_COLORS[dIdx % ROUTE_COLORS.length],
                   color: "white",
                   fontWeight: 700,
                   fontSize: 12,
@@ -385,7 +391,7 @@ export default function MapView({
                   transition: "opacity 0.2s",
                   pointerEvents: "none",
                 }}>
-                  {String.fromCharCode(65 + index)}
+                  {String.fromCharCode(65 + dIdx)}
                 </div>
               </Marker>
             );
@@ -500,7 +506,8 @@ export default function MapView({
         {routesGeojson?.features?.length > 0 && (
           <div style={{ display: "flex", gap: 12, marginLeft: 8 }}>
             {routesGeojson.features.map((_, i) => {
-              const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+              const dIdx = displayOrder?.[i] ?? i;
+              const color = ROUTE_COLORS[dIdx % ROUTE_COLORS.length];
               const isHL = highlightedRoute === i;
               return (
                 <span
@@ -513,7 +520,7 @@ export default function MapView({
                     height: 0,
                     borderTop: isHL ? `3px solid ${color}` : `3px dashed ${color}`,
                   }} />
-                  Route {String.fromCharCode(65 + i)}
+                  Route {String.fromCharCode(65 + dIdx)}
                 </span>
               );
             })}
