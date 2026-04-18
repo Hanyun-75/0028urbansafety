@@ -302,6 +302,16 @@ export default function MapView({
 
           {showNoise && <NoisePollutionLayer opacity={noiseOpacity} />}
 
+          {/* Camden borough outline */}
+          <Source id="camden-outline" type="geojson" data="/data/Final_Borough_Map.geojson">
+            <Layer
+              id="camden-border"
+              type="line"
+              filter={["==", ["get", "NAME"], "Camden"]}
+              paint={{ "line-color": "#2563eb", "line-width": 2.5, "line-opacity": 0.9 }}
+            />
+          </Source>
+
           {/* Route lines */}
           {routesGeojson?.features?.map((feature, index) => {
             const dIdx = displayOrder?.[index] ?? index;
