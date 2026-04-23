@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Map, { Marker, Source, Layer } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -29,6 +29,41 @@ const SIMPLE_RASTER_STYLE = {
   ],
 };
 
+const CAMDEN_BOUNDARY_URL = "/data/camden_boundaryweb.geojson";
+
+const CAMDEN_BOUNDS = [
+  [-0.2135, 51.5127], // west, south
+  [-0.1053, 51.5730], // east, north
+];
+
+const CAMDEN_INITIAL_VIEW = {
+  longitude: -0.159,
+  latitude: 51.543,
+  zoom: 12.4,
+};
+
+const CAMDEN_PADDING = { top: 40, right: 40, bottom: 40, left: 40 };
+
+const MASK_OUTER_RING = [
+  [-0.62, 51.28],
+  [0.38, 51.28],
+  [0.38, 51.72],
+  [-0.62, 51.72],
+  [-0.62, 51.28],
+];
+
+const srOnlyStyle = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0,0,0,0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
 function getRouteLayerStyle(index, highlightedRoute, displayIdx) {
   const isHighlighted = highlightedRoute === index;
   const hasSelection = highlightedRoute !== null;
@@ -40,8 +75,8 @@ function getRouteLayerStyle(index, highlightedRoute, displayIdx) {
     type: "line",
     paint: {
       "line-color": color,
-      "line-width": isHighlighted ? 6 : 3.5,
-      "line-opacity": isDimmed ? 0.2 : 0.9,
+      "line-width": isHighlighted ? 6 : 4,
+      "line-opacity": isDimmed ? 0.22 : 0.92,
       "line-dasharray": isHighlighted ? [1, 0] : [2, 2],
     },
   };
@@ -64,6 +99,56 @@ function getRouteLabelPoint(feature) {
   return coords[mid];
 }
 
+function getCamdenFeatureFromGeoJSON(data) {
+  if (!data) return null;
+
+  if (data.type === "Feature" && data?.properties?.NAME === "Camden") {
+    return data;
+  }
+
+  if (data.type === "FeatureCollection") {
+    return (
+      data.features?.find((feature) => feature?.properties?.NAME === "Camden") ||
+      data.features?.[0] ||
+      null
+    );
+  }
+
+  return null;
+}
+
+function getCamdenHoleRings(geometry) {
+  if (!geometry) return [];
+
+  if (geometry.type === "Polygon") {
+    return [geometry.coordinates[0]];
+  }
+
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.map((polygon) => polygon[0]);
+  }
+
+  return [];
+}
+
+function buildMaskGeoJSON(camdenFeature) {
+  const holes = getCamdenHoleRings(camdenFeature?.geometry);
+
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {},
+        geometry: {
+          type: "Polygon",
+          coordinates: [MASK_OUTER_RING, ...holes],
+        },
+      },
+    ],
+  };
+}
+
 export default function MapView({
   routesGeojson,
   setRoutesGeojson,
@@ -84,13 +169,42 @@ export default function MapView({
   filterMode,
   displayOrder,
 }) {
+  const mapRef = useRef(null);
+
   const [showNoise, setShowNoise] = useState(false);
   const [noiseOpacity, setNoiseOpacity] = useState(0.55);
+  const [focusStudyArea, setFocusStudyArea] = useState(true);
+
+  const [camdenGeojson, setCamdenGeojson] = useState(null);
+  const [camdenMaskGeojson, setCamdenMaskGeojson] = useState(null);
+
+  const [announcement, setAnnouncement] = useState(
+    "Interactive route map ready. Focused on Camden study area."
+  );
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const routeCount = routesGeojson?.features?.length ?? 0;
+  const safeRoutesInfo = routesInfo || [];
+
+  const fitToCamden = () => {
+    if (!mapRef.current) return;
+
+    try {
+      mapRef.current.fitBounds(CAMDEN_BOUNDS, {
+        padding: CAMDEN_PADDING,
+        duration: 0,
+        maxZoom: 12.8,
+      });
+    } catch (error) {
+      console.error("Failed to fit map to Camden:", error);
+    }
+  };
 
   const clearRouteResults = () => {
     setRoutesGeojson(null);
     setRoutesInfo([]);
     setHighlightedRoute?.(null);
+    setErrorMessage("");
   };
 
   const resetAll = () => {
@@ -100,31 +214,63 @@ export default function MapView({
     setEndQuery?.("");
     clearRouteResults();
     setStatus?.("idle");
+    setAnnouncement("Map reset. Focus returned to Camden study area.");
+    fitToCamden();
   };
 
   const reverseGeocode = async (lat, lng) => {
     try {
       const url =
         `https://nominatim.openstreetmap.org/reverse?` +
-        new URLSearchParams({ lat, lon: lng, format: "jsonv2", zoom: 18 }).toString();
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
+        new URLSearchParams({
+          lat,
+          lon: lng,
+          format: "jsonv2",
+          zoom: 18,
+        }).toString();
+
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+      });
+
       if (!res.ok) return null;
+
       const data = await res.json();
       const addr = data.address || {};
-      return addr.road || addr.pedestrian || addr.footway || addr.neighbourhood || data.name || null;
+      return (
+        addr.road ||
+        addr.pedestrian ||
+        addr.footway ||
+        addr.neighbourhood ||
+        data.name ||
+        null
+      );
     } catch {
       return null;
     }
   };
 
-  const setPointWithGeocode = (lat, lng, setPoint, setQuery) => {
+  const setPointWithGeocode = (lat, lng, setPoint, setQuery, kind) => {
     const fallback = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     const point = { lat, lng, label: fallback };
+
     setPoint(point);
     setQuery?.(fallback);
+
+    if (kind === "start") {
+      setAnnouncement("Start point selected. Now choose an end point.");
+    } else if (kind === "end") {
+      setAnnouncement("End point selected. You can now compute routes.");
+    }
+
     reverseGeocode(lat, lng).then((name) => {
       if (!name) return;
-      setPoint((prev) => prev && prev.lat === lat && prev.lng === lng ? { ...prev, label: name } : prev);
+
+      setPoint((prev) =>
+        prev && prev.lat === lat && prev.lng === lng
+          ? { ...prev, label: name }
+          : prev
+      );
       setQuery?.(name);
     });
   };
@@ -133,7 +279,7 @@ export default function MapView({
     const { lng, lat } = event.lngLat;
 
     if (!startPoint) {
-      setPointWithGeocode(lat, lng, setStartPoint, setStartQuery);
+      setPointWithGeocode(lat, lng, setStartPoint, setStartQuery, "start");
       setEndPoint(null);
       setEndQuery?.("");
       clearRouteResults();
@@ -142,13 +288,13 @@ export default function MapView({
     }
 
     if (!endPoint) {
-      setPointWithGeocode(lat, lng, setEndPoint, setEndQuery);
+      setPointWithGeocode(lat, lng, setEndPoint, setEndQuery, "end");
       setHighlightedRoute?.(null);
       setStatus?.("idle");
       return;
     }
 
-    setPointWithGeocode(lat, lng, setStartPoint, setStartQuery);
+    setPointWithGeocode(lat, lng, setStartPoint, setStartQuery, "start");
     setEndPoint(null);
     setEndQuery?.("");
     clearRouteResults();
@@ -164,6 +310,8 @@ export default function MapView({
     setLoading(true);
     setHighlightedRoute?.(null);
     setStatus?.("loading");
+    setErrorMessage("");
+    setAnnouncement("Calculating walking routes.");
 
     try {
       await loadLAEIData();
@@ -225,8 +373,9 @@ export default function MapView({
             duration,
             avgNO2: pollutionResult?.avgNO2 ?? null,
             avgPM25: pollutionResult?.avgPM25 ?? null,
-            dataCoverage: pollutionResult?.dataCoverage ?? null,
+            airCoverage: pollutionResult?.dataCoverage ?? null,
             avgNoise: noiseResult?.avgNoise ?? null,
+            noiseCoverage: noiseResult?.dataCoverage ?? null,
             dangerPct: noiseResult?.dangerPct ?? null,
             geometry: feature?.geometry ?? null,
             highPollutionPoints: pollutionResult?.highPollutionPoints ?? [],
@@ -237,14 +386,50 @@ export default function MapView({
 
       setRoutesInfo(parsedRoutes);
       setStatus?.("done");
+      setAnnouncement(`${parsedRoutes.length} routes loaded for comparison.`);
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch route or pollution data. Check your ORS key, data file, or network.");
       setStatus?.("error");
+      setErrorMessage(
+        "Could not calculate routes. Please check your network, API key, or data files."
+      );
+      setAnnouncement("Route calculation failed.");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCamdenBoundary() {
+      try {
+        const res = await fetch(CAMDEN_BOUNDARY_URL);
+        if (!res.ok) throw new Error("Failed to load Camden boundary");
+
+        const data = await res.json();
+        const camdenFeature = getCamdenFeatureFromGeoJSON(data);
+
+        if (!camdenFeature || cancelled) return;
+
+        const featureCollection = {
+          type: "FeatureCollection",
+          features: [camdenFeature],
+        };
+
+        setCamdenGeojson(featureCollection);
+        setCamdenMaskGeojson(buildMaskGeoJSON(camdenFeature));
+      } catch (error) {
+        console.error("Failed to load Camden boundary:", error);
+      }
+    }
+
+    loadCamdenBoundary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!quickPickRequest) return;
@@ -254,6 +439,7 @@ export default function MapView({
 
     const startFallback = `${startLat.toFixed(4)}, ${startLng.toFixed(4)}`;
     const endFallback = `${endLat.toFixed(4)}, ${endLng.toFixed(4)}`;
+
     const nextStart = { lat: startLat, lng: startLng, label: startFallback };
     const nextEnd = { lat: endLat, lng: endLng, label: endFallback };
 
@@ -264,55 +450,141 @@ export default function MapView({
 
     clearRouteResults();
     setStatus?.("idle");
+    setAnnouncement("Demo route selected. Calculating routes.");
 
     fetchRoute(nextStart, nextEnd);
 
     reverseGeocode(startLat, startLng).then((name) => {
       if (!name) return;
-      setStartPoint((prev) => prev && prev.lat === startLat ? { ...prev, label: name } : prev);
+      setStartPoint((prev) =>
+        prev && prev.lat === startLat ? { ...prev, label: name } : prev
+      );
       setStartQuery?.(name);
     });
+
     reverseGeocode(endLat, endLng).then((name) => {
       if (!name) return;
-      setEndPoint((prev) => prev && prev.lat === endLat ? { ...prev, label: name } : prev);
+      setEndPoint((prev) =>
+        prev && prev.lat === endLat ? { ...prev, label: name } : prev
+      );
       setEndQuery?.(name);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickPickRequest]);
 
   const canCompute = startPoint && endPoint && !loading;
+  const mapHint = !startPoint
+    ? "Click on the map to set a start point"
+    : !endPoint
+    ? "Now click to set an end point"
+    : "Start and end points are ready";
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-      {/* Map fills all available height */}
-      <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
+    <section
+      aria-labelledby="route-map-heading"
+      aria-describedby="route-map-description"
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        minWidth: 0,
+      }}
+    >
+      <h2 id="route-map-heading" style={srOnlyStyle}>
+        Interactive route map
+      </h2>
+
+      <p id="route-map-description" style={srOnlyStyle}>
+        The map is focused on the Camden study area. Areas outside Camden are
+        visually de-emphasised to clarify data coverage. Route details remain
+        available in text outside the map.
+      </p>
+
+      <div aria-live="polite" aria-atomic="true" style={srOnlyStyle}>
+        {announcement}
+      </div>
+
+      {errorMessage && (
+        <div
+          role="alert"
+          style={{
+            padding: "10px 14px",
+            background: "#fef2f2",
+            color: "#991b1b",
+            borderBottom: "1px solid #fecaca",
+            fontSize: 14,
+            lineHeight: 1.45,
+          }}
+        >
+          {errorMessage}
+        </div>
+      )}
+
+      <div
+        style={{
+          position: "relative",
+          flex: 1,
+          overflow: "hidden",
+          minHeight: 320,
+        }}
+      >
         <Map
+          id="route-map"
+          ref={mapRef}
           mapLib={maplibregl}
-          initialViewState={{ longitude: -0.1276, latitude: 51.5072, zoom: 12 }}
+          initialViewState={CAMDEN_INITIAL_VIEW}
           mapStyle={SIMPLE_RASTER_STYLE}
           style={{ width: "100%", height: "100%" }}
           onClick={handleMapClick}
+          onLoad={fitToCamden}
+          attributionControl={true}
         >
           {startPoint && (
-            <Marker longitude={startPoint.lng} latitude={startPoint.lat} color="#16a34a" />
+            <Marker longitude={startPoint.lng} latitude={startPoint.lat} color="#15803d" />
           )}
+
           {endPoint && (
-            <Marker longitude={endPoint.lng} latitude={endPoint.lat} color="#dc2626" />
+            <Marker longitude={endPoint.lng} latitude={endPoint.lat} color="#b91c1c" />
           )}
 
           {showNoise && <NoisePollutionLayer opacity={noiseOpacity} />}
 
-          {/* Camden borough outline */}
-          <Source id="camden-outline" type="geojson" data="/data/Final_Borough_Map.geojson">
-            <Layer
-              id="camden-border"
-              type="line"
-              filter={["==", ["get", "NAME"], "Camden"]}
-              paint={{ "line-color": "#2563eb", "line-width": 2.5, "line-opacity": 0.9 }}
-            />
-          </Source>
+          {focusStudyArea && camdenMaskGeojson && (
+            <Source id="camden-mask" type="geojson" data={camdenMaskGeojson}>
+              <Layer
+                id="camden-mask-fill"
+                type="fill"
+                paint={{
+                  "fill-color": "#f8fafc",
+                  "fill-opacity": 0.6,
+                }}
+              />
+            </Source>
+          )}
 
-          {/* Route lines */}
+          {camdenGeojson && (
+            <Source id="camden-outline" type="geojson" data={camdenGeojson}>
+              <Layer
+                id="camden-fill-soft"
+                type="fill"
+                paint={{
+                  "fill-color": "#ffffff",
+                  "fill-opacity": 0.06,
+                }}
+              />
+              <Layer
+                id="camden-border"
+                type="line"
+                paint={{
+                  "line-color": "#4f6296",
+                  "line-width": 5,
+                  "line-opacity": 0.65,
+                }}
+              />
+            </Source>
+          )}
+
           {routesGeojson?.features?.map((feature, index) => {
             const dIdx = displayOrder?.[index] ?? index;
             return (
@@ -327,56 +599,71 @@ export default function MapView({
             );
           })}
 
-          {/* Hazard dots — on top of route lines, filtered by mode */}
-          {(filterMode === "air" || filterMode === "overall") && routesInfo.map((route) => {
-            const idx = route.originalIndex;
-            const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
-            const pts = pointsToGeoJSON(route.highPollutionPoints || []);
-            return pts.features.length > 0 ? (
-              <Source key={`poll-pts-${idx}`} id={`poll-pts-${idx}`} type="geojson" data={pts}>
-                <Layer
-                  id={`poll-dots-${idx}`}
-                  type="circle"
-                  paint={{
-                    "circle-radius": 4.5,
-                    "circle-color": "#dc2626",
-                    "circle-opacity": dimmed ? 0.08 : 0.85,
-                    "circle-stroke-width": 1.5,
-                    "circle-stroke-color": "#ffffff",
-                    "circle-stroke-opacity": dimmed ? 0.08 : 0.9,
-                  }}
-                />
-              </Source>
-            ) : null;
-          })}
-          {(filterMode === "noise" || filterMode === "overall") && routesInfo.map((route) => {
-            const idx = route.originalIndex;
-            const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
-            const pts = pointsToGeoJSON(route.highNoisePoints || []);
-            return pts.features.length > 0 ? (
-              <Source key={`noise-pts-${idx}`} id={`noise-pts-${idx}`} type="geojson" data={pts}>
-                <Layer
-                  id={`noise-dots-${idx}`}
-                  type="circle"
-                  paint={{
-                    "circle-radius": 3.5,
-                    "circle-color": "#f59e0b",
-                    "circle-opacity": dimmed ? 0.08 : 0.85,
-                    "circle-stroke-width": 1.5,
-                    "circle-stroke-color": "#ffffff",
-                    "circle-stroke-opacity": dimmed ? 0.08 : 0.9,
-                  }}
-                />
-              </Source>
-            ) : null;
-          })}
+          {(filterMode === "air" || filterMode === "overall") &&
+            safeRoutesInfo.map((route) => {
+              const idx = route.originalIndex;
+              const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
+              const pts = pointsToGeoJSON(route.highPollutionPoints || []);
 
-          {/* Route labels A/B/C on map */}
+              return pts.features.length > 0 ? (
+                <Source
+                  key={`poll-pts-${idx}`}
+                  id={`poll-pts-${idx}`}
+                  type="geojson"
+                  data={pts}
+                >
+                  <Layer
+                    id={`poll-dots-${idx}`}
+                    type="circle"
+                    paint={{
+                      "circle-radius": 4.5,
+                      "circle-color": "#dc2626",
+                      "circle-opacity": dimmed ? 0.1 : 0.88,
+                      "circle-stroke-width": 1.5,
+                      "circle-stroke-color": "#ffffff",
+                      "circle-stroke-opacity": dimmed ? 0.1 : 0.95,
+                    }}
+                  />
+                </Source>
+              ) : null;
+            })}
+
+          {(filterMode === "noise" || filterMode === "overall") &&
+            safeRoutesInfo.map((route) => {
+              const idx = route.originalIndex;
+              const dimmed = highlightedRoute !== null && highlightedRoute !== idx;
+              const pts = pointsToGeoJSON(route.highNoisePoints || []);
+
+              return pts.features.length > 0 ? (
+                <Source
+                  key={`noise-pts-${idx}`}
+                  id={`noise-pts-${idx}`}
+                  type="geojson"
+                  data={pts}
+                >
+                  <Layer
+                    id={`noise-dots-${idx}`}
+                    type="circle"
+                    paint={{
+                      "circle-radius": 3.8,
+                      "circle-color": "#d97706",
+                      "circle-opacity": dimmed ? 0.1 : 0.88,
+                      "circle-stroke-width": 1.5,
+                      "circle-stroke-color": "#ffffff",
+                      "circle-stroke-opacity": dimmed ? 0.1 : 0.95,
+                    }}
+                  />
+                </Source>
+              ) : null;
+            })}
+
           {routesGeojson?.features?.map((feature, index) => {
             const pt = getRouteLabelPoint(feature);
             if (!pt) return null;
+
             const dIdx = displayOrder?.[index] ?? index;
             const isHidden = highlightedRoute !== null && highlightedRoute !== index;
+
             return (
               <Marker
                 key={`route-label-${index}`}
@@ -384,23 +671,26 @@ export default function MapView({
                 latitude={pt[1]}
                 anchor="center"
               >
-                <div style={{
-                  background: ROUTE_COLORS[dIdx % ROUTE_COLORS.length],
-                  color: "white",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  width: 22,
-                  height: 22,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "2px solid white",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                  opacity: isHidden ? 0.15 : 1,
-                  transition: "opacity 0.2s",
-                  pointerEvents: "none",
-                }}>
+                <div
+                  aria-hidden="true"
+                  style={{
+                    background: ROUTE_COLORS[dIdx % ROUTE_COLORS.length],
+                    color: "white",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    width: 24,
+                    height: 24,
+                    borderRadius: "999px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "2px solid white",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                    opacity: isHidden ? 0.18 : 1,
+                    transition: "opacity 0.2s",
+                    pointerEvents: "none",
+                  }}
+                >
                   {String.fromCharCode(65 + dIdx)}
                 </div>
               </Marker>
@@ -408,74 +698,107 @@ export default function MapView({
           })}
         </Map>
 
-        {/* Noise legend */}
+        <aside
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            zIndex: 10,
+            background: "rgba(255,255,255,0.97)",
+            color: "#0f172a",
+            border: "1px solid #cbd5e1",
+            borderRadius: 12,
+            padding: "10px 12px",
+            maxWidth: 290,
+            boxShadow: "0 2px 8px rgba(15,23,42,0.08)",
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 700 }}>
+            Study area: Camden
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: 1.45,
+              color: "#334155",
+              marginTop: 4,
+            }}
+          >
+            Areas outside the current study area are visually de-emphasised to
+            clarify data coverage and keep route comparison focused.
+          </div>
+        </aside>
+
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(15,23,42,0.88)",
+            color: "white",
+            fontSize: 13,
+            padding: "7px 14px",
+            borderRadius: 999,
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+            maxWidth: "90%",
+          }}
+        >
+          {mapHint}
+        </div>
+
         <div style={{ position: "absolute", bottom: 24, right: 12, zIndex: 10 }}>
           <NoiseLegend
             show={showNoise}
-            onToggle={() => setShowNoise((v) => !v)}
+            onToggle={() => {
+              setShowNoise((prev) => {
+                const next = !prev;
+                setAnnouncement(
+                  next ? "Noise layer turned on." : "Noise layer turned off."
+                );
+                return next;
+              });
+            }}
             opacity={noiseOpacity}
-            onOpacityChange={setNoiseOpacity}
+            onOpacityChange={(value) => {
+              setNoiseOpacity(value);
+              setAnnouncement(`Noise layer opacity changed to ${Math.round(value * 100)} percent.`);
+            }}
           />
         </div>
-
-        {/* Click hint when no points set */}
-        {!startPoint && (
-          <div style={{
-            position: "absolute",
-            top: 12,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(30,41,59,0.85)",
-            color: "white",
-            fontSize: 13,
-            padding: "6px 14px",
-            borderRadius: 20,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}>
-            Click on the map to set a start point
-          </div>
-        )}
-        {startPoint && !endPoint && (
-          <div style={{
-            position: "absolute",
-            top: 12,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(30,41,59,0.85)",
-            color: "white",
-            fontSize: 13,
-            padding: "6px 14px",
-            borderRadius: 20,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}>
-            Now click to set an end point
-          </div>
-        )}
       </div>
 
-      {/* Controls bar */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 16px",
-        background: "white",
-        borderTop: "1px solid #e2e8f0",
-        flexShrink: 0,
-      }}>
+      <div
+        role="group"
+        aria-label="Map controls and legends"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 10,
+          padding: "12px 16px",
+          background: "white",
+          borderTop: "1px solid #e2e8f0",
+          flexShrink: 0,
+        }}
+      >
         <button
+          type="button"
           onClick={() => fetchRoute()}
           disabled={!canCompute}
           aria-label="Compute walking routes"
+          className="map-control-button map-control-button--primary"
           style={{
-            padding: "8px 20px",
+            minHeight: 44,
+            minWidth: 44,
+            padding: "10px 20px",
             background: canCompute ? "#2563eb" : "#e2e8f0",
-            color: canCompute ? "white" : "#94a3b8",
-            border: "none",
-            borderRadius: 8,
-            fontWeight: 600,
+            color: canCompute ? "white" : "#64748b",
+            border: "1px solid transparent",
+            borderRadius: 10,
+            fontWeight: 700,
             fontSize: 14,
             cursor: canCompute ? "pointer" : "not-allowed",
           }}
@@ -484,59 +807,189 @@ export default function MapView({
         </button>
 
         <button
+          type="button"
           onClick={resetAll}
-          aria-label="Reset map"
+          aria-label="Reset points, routes, and return to Camden"
+          className="map-control-button"
           style={{
-            padding: "8px 16px",
+            minHeight: 44,
+            minWidth: 44,
+            padding: "10px 16px",
             background: "white",
-            color: "#374151",
-            border: "1px solid #d1d5db",
-            borderRadius: 8,
+            color: "#0f172a",
+            border: "1px solid #cbd5e1",
+            borderRadius: 10,
+            fontWeight: 600,
             fontSize: 14,
+            cursor: "pointer",
           }}
         >
           Reset
         </button>
 
-        {/* Hazard legend */}
-        {routesGeojson?.features?.length > 0 && (
-          <div style={{ display: "flex", gap: 10, marginLeft: 8 }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748b" }}>
-              <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#dc2626", border: "1.5px solid white", boxShadow: "0 0 0 1px #d1d5db" }} />
-              NO₂{">"}40 or PM2.5{">"}15
+        <button
+          type="button"
+          onClick={() => {
+            fitToCamden();
+            setAnnouncement("Map centred on Camden.");
+          }}
+          aria-label="Centre map on Camden"
+          className="map-control-button"
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            padding: "10px 16px",
+            background: "white",
+            color: "#0f172a",
+            border: "1px solid #cbd5e1",
+            borderRadius: 10,
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: "pointer",
+          }}
+        >
+          Centre Camden
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setFocusStudyArea((prev) => {
+              const next = !prev;
+              setAnnouncement(
+                next
+                  ? "Study area focus turned on."
+                  : "Study area focus turned off."
+              );
+              return next;
+            });
+          }}
+          aria-pressed={focusStudyArea}
+          aria-label="Toggle Camden study area focus"
+          className="map-control-button"
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            padding: "10px 16px",
+            background: focusStudyArea ? "#dbeafe" : "white",
+            color: "#0f172a",
+            border: `1px solid ${focusStudyArea ? "#2563eb" : "#cbd5e1"}`,
+            borderRadius: 10,
+            fontWeight: 600,
+            fontSize: 14,
+            cursor: "pointer",
+          }}
+        >
+          {focusStudyArea ? "Focus on" : "Focus off"}
+        </button>
+
+        {routeCount > 0 && (
+          <div
+            role="group"
+            aria-label="Hazard legend"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginLeft: 4,
+            }}
+          >
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                color: "#334155",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 10,
+                  height: 10,
+                  borderRadius: "999px",
+                  background: "#dc2626",
+                  border: "1.5px solid white",
+                  boxShadow: "0 0 0 1px #cbd5e1",
+                }}
+              />
+              Air hazard point: NO₂ &gt; 40 or PM2.5 &gt; 15
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#64748b" }}>
-              <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "#f59e0b", border: "1.5px solid white", boxShadow: "0 0 0 1px #d1d5db" }} />
-              Noise{"≥"}75 dB
+
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                color: "#334155",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 10,
+                  height: 10,
+                  borderRadius: "999px",
+                  background: "#d97706",
+                  border: "1.5px solid white",
+                  boxShadow: "0 0 0 1px #cbd5e1",
+                }}
+              />
+              Noise hazard point: 75 dB or above
             </span>
           </div>
         )}
 
-        {/* Route colour legend */}
-        {routesGeojson?.features?.length > 0 && (
-          <div style={{ display: "flex", gap: 12, marginLeft: 8 }}>
+        {routeCount > 0 && (
+          <div
+            role="group"
+            aria-label="Route legend"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              marginLeft: 4,
+            }}
+          >
             {routesGeojson.features.map((_, i) => {
               const dIdx = displayOrder?.[i] ?? i;
               const color = ROUTE_COLORS[dIdx % ROUTE_COLORS.length];
               const isHL = highlightedRoute === i;
+
               return (
                 <span
                   key={i}
-                  style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, color: "#374151" }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 13,
+                    color: "#0f172a",
+                  }}
                 >
-                  <span style={{
-                    display: "inline-block",
-                    width: 20,
-                    height: 0,
-                    borderTop: isHL ? `3px solid ${color}` : `3px dashed ${color}`,
-                  }} />
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "inline-block",
+                      width: 20,
+                      height: 0,
+                      borderTop: isHL
+                        ? `3px solid ${color}`
+                        : `3px dashed ${color}`,
+                    }}
+                  />
                   Route {String.fromCharCode(65 + dIdx)}
+                  {isHL ? " (selected)" : ""}
                 </span>
               );
             })}
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

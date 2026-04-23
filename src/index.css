@@ -39,7 +39,7 @@ p {
 button {
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 button:focus-visible {
@@ -54,4 +54,13 @@ a {
 
 a:hover {
   color: #1d4ed8;
+}
+
+.map-control-button:focus-visible {
+  outline: 3px solid #111827;
+  outline-offset: 2px;
+}
+
+.map-control-button[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px #2563eb;
 }
