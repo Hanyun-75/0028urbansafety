@@ -94,13 +94,30 @@ export default function Sidebar({
   onFilterChange,
   onDisplayOrderChange,
 }) {
+
+
+
 const [noteRoute, setNoteRoute] = useState(null);
 const [pendingSavedRoute, setPendingSavedRoute] = useState(null);
-const routeNoteRef = useRef(null);
 const [dismissedQuickPickLabel, setDismissedQuickPickLabel] = useState(null);
+
+const routeNoteRef = useRef(null);
+const resultsRef = useRef(null);
+const previousStatusRef = useRef(status);
+
 useEffect(() => {
   setNoteRoute(null);
 }, [routes]);
+useEffect(() => {
+  if (status !== "done" || !routes?.length) return;
+
+  window.requestAnimationFrame(() => {
+    resultsRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  });
+}, [status, routes]);
 const matchedQuickPickLabel =
   QUICK_PICKS.find((qp) => matchesQuickPick(startPoint, endPoint, qp))?.label ??
   null;
@@ -110,6 +127,21 @@ const activeQuickPickLabel =
   matchedQuickPickLabel !== dismissedQuickPickLabel
     ? matchedQuickPickLabel
     : null;
+  useEffect(() => {
+  const becameDone =
+    previousStatusRef.current !== "done" && status === "done";
+
+  if (becameDone && routes?.length) {
+    window.requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  previousStatusRef.current = status;
+}, [status, routes]);
 useEffect(() => {
   if (!dismissedQuickPickLabel) return;
 
@@ -314,9 +346,10 @@ const handleQuickPickClick = (qp) => {
       <Divider />
 
       <section
-        aria-labelledby="results-heading"
-        style={{ padding: "0 20px", flex: 1 }}
-      >
+  ref={resultsRef}
+  aria-labelledby="results-heading"
+  style={{ padding: "0 20px", flex: 1 }}
+>
         <SectionHeading id="results-heading">Route results</SectionHeading>
 
         {status === "idle" && !routes.length && (

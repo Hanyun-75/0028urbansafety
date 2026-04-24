@@ -170,6 +170,8 @@ export default function MapView({
   displayOrder,
 }) {
   const mapRef = useRef(null);
+  const requestIdRef = useRef(0);
+  const laeiReadyRef = useRef(false);
 
   const [showNoise, setShowNoise] = useState(false);
   const [noiseOpacity, setNoiseOpacity] = useState(0.55);
@@ -217,6 +219,17 @@ export default function MapView({
     setAnnouncement("Map reset. Focus returned to Camden study area.");
     fitToCamden();
   };
+  const handleZoomIn = () => {
+  if (!mapRef.current) return;
+  mapRef.current.zoomIn({ duration: 200 });
+  setAnnouncement("Map zoomed in.");
+};
+
+const handleZoomOut = () => {
+  if (!mapRef.current) return;
+  mapRef.current.zoomOut({ duration: 200 });
+  setAnnouncement("Map zoomed out.");
+};
 
   const reverseGeocode = async (lat, lng) => {
     try {
@@ -301,103 +314,120 @@ export default function MapView({
     setStatus?.("idle");
   };
 
-  const fetchRoute = async (customStart = null, customEnd = null) => {
-    const activeStart = customStart || startPoint;
-    const activeEnd = customEnd || endPoint;
+  const ensureLAEIReady = async () => {
+  if (laeiReadyRef.current) return;
+  await loadLAEIData();
+  laeiReadyRef.current = true;
+};
+  //
+  
+const fetchRoute = async (customStart = null, customEnd = null) => {
+  const activeStart = customStart || startPoint;
+  const activeEnd = customEnd || endPoint;
 
-    if (!activeStart || !activeEnd) return;
+  if (!activeStart || !activeEnd) return;
 
-    setLoading(true);
-    setHighlightedRoute?.(null);
-    setStatus?.("loading");
-    setErrorMessage("");
-    setAnnouncement("Calculating walking routes.");
+  const requestId = requestIdRef.current + 1;
+  requestIdRef.current = requestId;
 
-    try {
-      await loadLAEIData();
+  setLoading(true);
+  clearRouteResults();
+  setStatus?.("loading");
+  setErrorMessage("");
+  setAnnouncement("Calculating walking routes.");
 
-      const res = await fetch(
-        "https://api.openrouteservice.org/v2/directions/foot-walking/geojson",
-        {
-          method: "POST",
-          headers: {
-            Authorization: import.meta.env.VITE_ORS_KEY,
-            "Content-Type": "application/json",
+  try {
+    await ensureLAEIReady();
+
+    const res = await fetch(
+      "https://api.openrouteservice.org/v2/directions/foot-walking/geojson",
+      {
+        method: "POST",
+        headers: {
+          Authorization: import.meta.env.VITE_ORS_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          coordinates: [
+            [activeStart.lng, activeStart.lat],
+            [activeEnd.lng, activeEnd.lat],
+          ],
+          alternative_routes: {
+            target_count: 3,
+            share_factor: 0.6,
+            weight_factor: 1.4,
           },
-          body: JSON.stringify({
-            coordinates: [
-              [activeStart.lng, activeStart.lat],
-              [activeEnd.lng, activeEnd.lat],
-            ],
-            alternative_routes: {
-              target_count: 3,
-              share_factor: 0.6,
-              weight_factor: 1.4,
-            },
-          }),
-        }
-      );
+        }),
+      }
+    );
 
-      if (!res.ok) throw new Error(`ORS request failed: ${res.status}`);
+    if (!res.ok) throw new Error(`ORS request failed: ${res.status}`);
 
-      const data = await res.json();
-      setRoutesGeojson(data);
+    const data = await res.json();
 
-      const parsedRoutes = await Promise.all(
-        (data?.features ?? []).map(async (feature, index) => {
-          const props = feature?.properties || {};
+    const parsedRoutes = await Promise.all(
+      (data?.features ?? []).map(async (feature, index) => {
+        const props = feature?.properties || {};
 
-          const distance =
-            props.segments?.[0]?.distance ??
-            props.summary?.distance ??
-            props.distance ??
-            null;
+        const distance =
+          props.segments?.[0]?.distance ??
+          props.summary?.distance ??
+          props.distance ??
+          null;
 
-          const duration =
-            props.segments?.[0]?.duration ??
-            props.summary?.duration ??
-            props.duration ??
-            null;
+        const duration =
+          props.segments?.[0]?.duration ??
+          props.summary?.duration ??
+          props.duration ??
+          null;
 
-          const coords = feature?.geometry?.coordinates || [];
-          const pollutionResult = scoreRoute(coords);
-          const noiseResult = await scoreRouteNoise(coords);
+        const coords = feature?.geometry?.coordinates || [];
+        const pollutionResult = scoreRoute(coords);
+        const noiseResult = await scoreRouteNoise(coords);
 
-          return {
-            id: index,
-            originalIndex: index,
-            name:
-              feature?.properties?.name ||
-              `Route ${String.fromCharCode(65 + index)}`,
-            distance,
-            duration,
-            avgNO2: pollutionResult?.avgNO2 ?? null,
-            avgPM25: pollutionResult?.avgPM25 ?? null,
-            airCoverage: pollutionResult?.dataCoverage ?? null,
-            avgNoise: noiseResult?.avgNoise ?? null,
-            noiseCoverage: noiseResult?.dataCoverage ?? null,
-            dangerPct: noiseResult?.dangerPct ?? null,
-            geometry: feature?.geometry ?? null,
-            highPollutionPoints: pollutionResult?.highPollutionPoints ?? [],
-            highNoisePoints: noiseResult?.highNoisePoints ?? [],
-          };
-        })
-      );
+        return {
+          id: index,
+          originalIndex: index,
+          name:
+            feature?.properties?.name ||
+            `Route ${String.fromCharCode(65 + index)}`,
+          distance,
+          duration,
+          avgNO2: pollutionResult?.avgNO2 ?? null,
+          avgPM25: pollutionResult?.avgPM25 ?? null,
+          airCoverage: pollutionResult?.dataCoverage ?? null,
+          avgNoise: noiseResult?.avgNoise ?? null,
+          noiseCoverage: noiseResult?.dataCoverage ?? null,
+          dangerPct: noiseResult?.dangerPct ?? null,
+          geometry: feature?.geometry ?? null,
+          highPollutionPoints: pollutionResult?.highPollutionPoints ?? [],
+          highNoisePoints: noiseResult?.highNoisePoints ?? [],
+        };
+      })
+    );
 
-      setRoutesInfo(parsedRoutes);
-      setStatus?.("done");
-      setAnnouncement(`${parsedRoutes.length} routes loaded for comparison.`);
-    } catch (error) {
-      console.error(error);
-      setStatus?.("error");
-      setErrorMessage(
-        "Could not calculate routes. Please check your network, API key, or data files."
-      );
-      setAnnouncement("Route calculation failed.");
-    } finally {
+    // Ignore stale results
+    if (requestId !== requestIdRef.current) return;
+
+    setRoutesGeojson(data);
+    setRoutesInfo(parsedRoutes);
+    setStatus?.("done");
+    setAnnouncement(`${parsedRoutes.length} routes loaded for comparison.`);
+  } catch (error) {
+    if (requestId !== requestIdRef.current) return;
+
+    console.error(error);
+    setStatus?.("error");
+    setErrorMessage(
+      "Could not calculate routes. Please check your network, API key, or data files."
+    );
+    setAnnouncement("Route calculation failed.");
+  } finally {
+    if (requestId === requestIdRef.current) {
       setLoading(false);
     }
-  };
+  }
+};
 
   useEffect(() => {
     let cancelled = false;
@@ -448,27 +478,28 @@ export default function MapView({
     setStartQuery?.(startFallback);
     setEndQuery?.(endFallback);
 
-    clearRouteResults();
-    setStatus?.("idle");
-    setAnnouncement("Demo route selected. Calculating routes.");
-
+    setAnnouncement("Quick route selected. Calculating routes.");
     fetchRoute(nextStart, nextEnd);
 
     reverseGeocode(startLat, startLng).then((name) => {
-      if (!name) return;
-      setStartPoint((prev) =>
-        prev && prev.lat === startLat ? { ...prev, label: name } : prev
-      );
-      setStartQuery?.(name);
-    });
+  if (!name) return;
+  setStartPoint((prev) =>
+    prev && prev.lat === startLat && prev.lng === startLng
+      ? { ...prev, label: name }
+      : prev
+  );
+  setStartQuery?.(name);
+});
 
-    reverseGeocode(endLat, endLng).then((name) => {
-      if (!name) return;
-      setEndPoint((prev) =>
-        prev && prev.lat === endLat ? { ...prev, label: name } : prev
-      );
-      setEndQuery?.(name);
-    });
+reverseGeocode(endLat, endLng).then((name) => {
+  if (!name) return;
+  setEndPoint((prev) =>
+    prev && prev.lat === endLat && prev.lng === endLng
+      ? { ...prev, label: name }
+      : prev
+  );
+  setEndQuery?.(name);
+});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickPickRequest]);
 
@@ -850,38 +881,81 @@ export default function MapView({
         >
           Centre Camden
         </button>
+        <button
+  type="button"
+  onClick={handleZoomIn}
+  aria-label="Zoom in on the map"
+  className="map-control-button"
+  style={{
+    minHeight: 44,
+    minWidth: 44,
+    padding: "10px 16px",
+    background: "white",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+  }}
+>
+  Zoom in
+</button>
+
+<button
+  type="button"
+  onClick={handleZoomOut}
+  aria-label="Zoom out on the map"
+  className="map-control-button"
+  style={{
+    minHeight: 44,
+    minWidth: 44,
+    padding: "10px 16px",
+    background: "white",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+  }}
+>
+  Zoom out
+</button>
 
         <button
-          type="button"
-          onClick={() => {
-            setFocusStudyArea((prev) => {
-              const next = !prev;
-              setAnnouncement(
-                next
-                  ? "Study area focus turned on."
-                  : "Study area focus turned off."
-              );
-              return next;
-            });
-          }}
-          aria-pressed={focusStudyArea}
-          aria-label="Toggle Camden study area focus"
-          className="map-control-button"
-          style={{
-            minHeight: 44,
-            minWidth: 44,
-            padding: "10px 16px",
-            background: focusStudyArea ? "#dbeafe" : "white",
-            color: "#0f172a",
-            border: `1px solid ${focusStudyArea ? "#2563eb" : "#cbd5e1"}`,
-            borderRadius: 10,
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: "pointer",
-          }}
-        >
-          {focusStudyArea ? "Focus on" : "Focus off"}
-        </button>
+  type="button"
+  onClick={() => {
+    setFocusStudyArea((prev) => {
+      const next = !prev;
+      setAnnouncement(
+        next
+          ? "Study area focus turned on."
+          : "Showing full map context."
+      );
+      return next;
+    });
+  }}
+  aria-pressed={focusStudyArea}
+  aria-label={
+    focusStudyArea ? "Show full map context" : "Focus on Camden study area"
+  }
+  className="map-control-button"
+  style={{
+    minHeight: 44,
+    minWidth: 44,
+    padding: "10px 16px",
+    background: focusStudyArea ? "#dbeafe" : "white",
+    color: "#0f172a",
+    border: `1px solid ${focusStudyArea ? "#2563eb" : "#cbd5e1"}`,
+    borderRadius: 10,
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+  }}
+>
+  {focusStudyArea ? "Show full context" : "Focus study area"}
+</button>
 
         {routeCount > 0 && (
           <div
