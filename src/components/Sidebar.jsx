@@ -104,20 +104,11 @@ const [dismissedQuickPickLabel, setDismissedQuickPickLabel] = useState(null);
 const routeNoteRef = useRef(null);
 const resultsRef = useRef(null);
 const previousStatusRef = useRef(status);
-
+const sidebarRef = useRef(null);
 useEffect(() => {
   setNoteRoute(null);
 }, [routes]);
-useEffect(() => {
-  if (status !== "done" || !routes?.length) return;
 
-  window.requestAnimationFrame(() => {
-    resultsRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  });
-}, [status, routes]);
 const matchedQuickPickLabel =
   QUICK_PICKS.find((qp) => matchesQuickPick(startPoint, endPoint, qp))?.label ??
   null;
@@ -127,16 +118,13 @@ const activeQuickPickLabel =
   matchedQuickPickLabel !== dismissedQuickPickLabel
     ? matchedQuickPickLabel
     : null;
-  useEffect(() => {
+useEffect(() => {
   const becameDone =
     previousStatusRef.current !== "done" && status === "done";
 
   if (becameDone && routes?.length) {
     window.requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
+      scrollSidebarTo(resultsRef);
     });
   }
 
@@ -149,14 +137,26 @@ useEffect(() => {
     setDismissedQuickPickLabel(null);
   }
 }, [matchedQuickPickLabel, dismissedQuickPickLabel]);
+
+const scrollSidebarTo = (targetRef) => {
+  const sidebarEl = sidebarRef.current;
+  const targetEl = targetRef.current;
+
+  if (!sidebarEl || !targetEl) return;
+
+  const top = targetEl.offsetTop - 8;
+
+  sidebarEl.scrollTo({
+    top: Math.max(top, 0),
+    behavior: "smooth",
+  });
+};
+
 const handleOpenNote = (target) => {
   setNoteRoute(target);
 
   window.requestAnimationFrame(() => {
-    routeNoteRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    scrollSidebarTo(routeNoteRef);
   });
 };
 const handleQuickPickClick = (qp) => {
@@ -173,18 +173,20 @@ const handleQuickPickClick = (qp) => {
 
 
   return (
-    <aside
-      aria-label="Route planner"
-      style={{
-        width: 380,
-        flexShrink: 0,
-        display: "flex",
-        flexDirection: "column",
-        background: "white",
-        borderLeft: "1px solid #e2e8f0",
-        overflowY: "auto",
-      }}
-    >
+<aside
+  ref={sidebarRef}
+  aria-label="Route planner"
+  style={{
+    width: 380,
+    flexShrink: 0,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    background: "white",
+    borderLeft: "1px solid #e2e8f0",
+    overflowY: "auto",
+  }}
+>
       <div
         style={{
           padding: "12px 20px",
@@ -348,7 +350,7 @@ const handleQuickPickClick = (qp) => {
       <section
   ref={resultsRef}
   aria-labelledby="results-heading"
-  style={{ padding: "0 20px", flex: 1 }}
+  style={{ padding: "0 20px" }}
 >
         <SectionHeading id="results-heading">Route results</SectionHeading>
 

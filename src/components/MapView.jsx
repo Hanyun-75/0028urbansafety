@@ -7,7 +7,7 @@ import { scoreRouteNoise } from "../utils/noise";
 import { ROUTE_COLORS } from "../utils/routeColors";
 import NoisePollutionLayer from "./NoisePollutionLayer";
 import NoiseLegend from "./NoiseLegend";
-
+import DataSourcesCard from "./DataSourcesCard";
 const SIMPLE_RASTER_STYLE = {
   version: 8,
   sources: {
@@ -63,6 +63,39 @@ const srOnlyStyle = {
   whiteSpace: "nowrap",
   border: 0,
 };
+const floatingCardStyle = {
+  background: "rgba(255,255,255,0.93)",
+  border: "1px solid #d1d5db",
+  borderRadius: 12,
+  padding: "12px",
+  fontSize: 12,
+  color: "#1f2937",
+  minWidth: 220,
+  boxShadow: "0 1px 4px rgba(15,23,42,0.08)",
+};
+
+const floatingStackLeftStyle = {
+  position: "absolute",
+  left: 12,
+  bottom: 24,
+  zIndex: 10,
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  alignItems: "flex-start",
+};
+
+const floatingStackRightStyle = {
+  position: "absolute",
+  right: 12,
+  bottom: 56,
+  zIndex: 10,
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  alignItems: "stretch",
+};
+
 
 function getRouteLayerStyle(index, highlightedRoute, displayIdx) {
   const isHighlighted = highlightedRoute === index;
@@ -176,6 +209,7 @@ export default function MapView({
   const [showNoise, setShowNoise] = useState(false);
   const [noiseOpacity, setNoiseOpacity] = useState(0.55);
   const [focusStudyArea, setFocusStudyArea] = useState(true);
+  const [showDataSources, setShowDataSources] = useState(true);
 
   const [camdenGeojson, setCamdenGeojson] = useState(null);
   const [camdenMaskGeojson, setCamdenMaskGeojson] = useState(null);
@@ -509,19 +543,22 @@ reverseGeocode(endLat, endLng).then((name) => {
     : !endPoint
     ? "Now click to set an end point"
     : "Start and end points are ready";
+  
+
 
   return (
     <section
-      aria-labelledby="route-map-heading"
-      aria-describedby="route-map-description"
-      style={{
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        minWidth: 0,
-      }}
-    >
+  aria-labelledby="route-map-heading"
+  aria-describedby="route-map-description"
+  style={{
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    minWidth: 0,
+    minHeight: 0,
+  }}
+>
       <h2 id="route-map-heading" style={srOnlyStyle}>
         Interactive route map
       </h2>
@@ -728,37 +765,207 @@ reverseGeocode(endLat, endLng).then((name) => {
             );
           })}
         </Map>
+        {routeCount > 0 && (
+          
+  <div style={floatingStackLeftStyle}>
+  <section
+  aria-labelledby="map-legend-heading"
+  style={{
+    ...floatingCardStyle,
+    width: 286,
+    maxWidth: "calc(100vw - 32px)",
+  }}
+>
+    <h2
+  id="map-legend-heading"
+  style={{
+    margin: "0 0 10px 0",
+    fontWeight: 700,
+    fontSize: 14,
+    color: "#0f172a",
+    lineHeight: 1.3,
+  }}
+>
+      Map legend
+    </h2>
 
-        <aside
+    <div style={{ marginBottom: 14 }}>
+      <h3
+  style={{
+    margin: "0 0 6px 0",
+    fontWeight: 700,
+    fontSize: 12,
+    color: "#475569",
+    lineHeight: 1.4,
+  }}
+>
+        Hazard points
+      </h3>
+
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: 0,
+        }}
+      >
+        <li
           style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            zIndex: 10,
-            background: "rgba(255,255,255,0.97)",
-            color: "#0f172a",
-            border: "1px solid #cbd5e1",
-            borderRadius: 12,
-            padding: "10px 12px",
-            maxWidth: 290,
-            boxShadow: "0 2px 8px rgba(15,23,42,0.08)",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            marginBottom: 6,
+            fontSize: 12,
+            color: "#334155",
+            lineHeight: 1.45,
           }}
         >
-          <div style={{ fontSize: 14, fontWeight: 700 }}>
-            Study area: Camden
-          </div>
-          <div
+          <span
+            aria-hidden="true"
             style={{
-              fontSize: 12,
-              lineHeight: 1.45,
-              color: "#334155",
-              marginTop: 4,
+              display: "inline-block",
+              width: 10,
+              height: 10,
+              borderRadius: "999px",
+              background: "#dc2626",
+              border: "1.5px solid white",
+              boxShadow: "0 0 0 1px #cbd5e1",
+              flexShrink: 0,
+              marginTop: 3,
             }}
-          >
-            Areas outside the current study area are visually de-emphasised to
-            clarify data coverage and keep route comparison focused.
-          </div>
-        </aside>
+          />
+          <span>
+            Air hazard point: NO₂ &gt; 40 μg/m³ or PM2.5 &gt; 15 μg/m³
+          </span>
+        </li>
+
+        <li
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            fontSize: 12,
+            color: "#334155",
+            lineHeight: 1.45,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              display: "inline-block",
+              width: 10,
+              height: 10,
+              borderRadius: "999px",
+              background: "#d97706",
+              border: "1.5px solid white",
+              boxShadow: "0 0 0 1px #cbd5e1",
+              flexShrink: 0,
+              marginTop: 3,
+            }}
+          />
+          <span>Noise hazard point: ≥ 75 dB</span>
+        </li>
+      </ul>
+    </div>
+
+    <div>
+      <h3
+  style={{
+    margin: "0 0 6px 0",
+    fontWeight: 700,
+    fontSize: 12,
+    color: "#475569",
+    lineHeight: 1.4,
+  }}
+>
+        Routes
+      </h3>
+
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: 0,
+        }}
+      >
+        {safeRoutesInfo.slice(0, 3).map((route, index) => {
+          const idx = route?.originalIndex ?? index;
+          const dIdx = displayOrder?.[idx] ?? idx;
+          const color = ROUTE_COLORS[dIdx % ROUTE_COLORS.length];
+          const isSelected = highlightedRoute === idx;
+
+          return (
+            <li
+              key={`legend-route-${idx}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: index === safeRoutesInfo.slice(0, 3).length - 1 ? 0 : 8,
+                fontSize: 12,
+                color: "#334155",
+                lineHeight: 1.45,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "inline-block",
+                  width: 20,
+                  height: 0,
+                  borderTop: isSelected
+                    ? `3px solid ${color}`
+                    : `3px dashed ${color}`,
+                  flexShrink: 0,
+                }}
+              />
+              <span>
+                {route?.name || `Route ${String.fromCharCode(65 + dIdx)}`}
+                {isSelected ? " (selected)" : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </section>
+</div>
+)}
+
+        <aside
+  style={{
+    ...floatingCardStyle,
+    position: "absolute",
+    top: 12,
+    left: 12,
+    zIndex: 10,
+    width: 280,
+    maxWidth: "calc(100vw - 32px)",
+    color: "#0f172a",
+  }}
+>
+  <div
+    style={{
+      fontSize: 14,
+      fontWeight: 700,
+      lineHeight: 1.3,
+      marginBottom: 6,
+      color: "#0f172a",
+    }}
+  >
+    Study area: Camden
+  </div>
+  <div
+    style={{
+      fontSize: 12,
+      lineHeight: 1.45,
+      color: "#334155",
+    }}
+  >
+    Areas outside the current study area are visually de-emphasised to clarify
+    data coverage and keep route comparison focused.
+  </div>
+</aside>
 
         <div
           aria-hidden="true"
@@ -780,30 +987,45 @@ reverseGeocode(endLat, endLng).then((name) => {
           {mapHint}
         </div>
 
-        <div style={{ position: "absolute", bottom: 24, right: 12, zIndex: 10 }}>
-          <NoiseLegend
-            show={showNoise}
-            onToggle={() => {
-              setShowNoise((prev) => {
-                const next = !prev;
-                setAnnouncement(
-                  next ? "Noise layer turned on." : "Noise layer turned off."
-                );
-                return next;
-              });
-            }}
-            opacity={noiseOpacity}
-            onOpacityChange={(value) => {
-              setNoiseOpacity(value);
-              setAnnouncement(`Noise layer opacity changed to ${Math.round(value * 100)} percent.`);
-            }}
-          />
-        </div>
+        <div style={floatingStackRightStyle}>
+ <DataSourcesCard
+  isOpen={showDataSources}
+  onToggle={() => {
+    setShowDataSources((prev) => {
+      const next = !prev;
+      setAnnouncement(
+        next ? "Data sources shown." : "Data sources hidden."
+      );
+      return next;
+    });
+  }}
+/>
+
+  <NoiseLegend
+    show={showNoise}
+    onToggle={() => {
+      setShowNoise((prev) => {
+        const next = !prev;
+        setAnnouncement(
+          next ? "Noise layer turned on." : "Noise layer turned off."
+        );
+        return next;
+      });
+    }}
+    opacity={noiseOpacity}
+    onOpacityChange={(value) => {
+      setNoiseOpacity(value);
+      setAnnouncement(
+        `Noise layer opacity changed to ${Math.round(value * 100)} percent.`
+      );
+    }}
+  />
+</div>
       </div>
 
       <div
         role="group"
-        aria-label="Map controls and legends"
+        aria-label="Map controls"
         style={{
           display: "flex",
           flexWrap: "wrap",
@@ -957,112 +1179,8 @@ reverseGeocode(endLat, endLng).then((name) => {
   {focusStudyArea ? "Show full context" : "Focus study area"}
 </button>
 
-        {routeCount > 0 && (
-          <div
-            role="group"
-            aria-label="Hazard legend"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginLeft: 4,
-            }}
-          >
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                color: "#334155",
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  display: "inline-block",
-                  width: 10,
-                  height: 10,
-                  borderRadius: "999px",
-                  background: "#dc2626",
-                  border: "1.5px solid white",
-                  boxShadow: "0 0 0 1px #cbd5e1",
-                }}
-              />
-              Air hazard point: NO₂ &gt; 40 or PM2.5 &gt; 15
-            </span>
-
-            <span
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                color: "#334155",
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  display: "inline-block",
-                  width: 10,
-                  height: 10,
-                  borderRadius: "999px",
-                  background: "#d97706",
-                  border: "1.5px solid white",
-                  boxShadow: "0 0 0 1px #cbd5e1",
-                }}
-              />
-              Noise hazard point: 75 dB or above
-            </span>
-          </div>
-        )}
-
-        {routeCount > 0 && (
-          <div
-            role="group"
-            aria-label="Route legend"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              marginLeft: 4,
-            }}
-          >
-            {routesGeojson.features.map((_, i) => {
-              const dIdx = displayOrder?.[i] ?? i;
-              const color = ROUTE_COLORS[dIdx % ROUTE_COLORS.length];
-              const isHL = highlightedRoute === i;
-
-              return (
-                <span
-                  key={i}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 13,
-                    color: "#0f172a",
-                  }}
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      display: "inline-block",
-                      width: 20,
-                      height: 0,
-                      borderTop: isHL
-                        ? `3px solid ${color}`
-                        : `3px dashed ${color}`,
-                    }}
-                  />
-                  Route {String.fromCharCode(65 + dIdx)}
-                  {isHL ? " (selected)" : ""}
-                </span>
-              );
-            })}
-          </div>
-        )}
+        
+        
       </div>
     </section>
   );

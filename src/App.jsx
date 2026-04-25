@@ -19,8 +19,17 @@ export default function App() {
   const [endQuery, setEndQuery] = useState("");
 
   const handleQuickPick = (start, end) => {
-    const nextStart = { lat: start[0], lng: start[1], label: `${start[0].toFixed(4)}, ${start[1].toFixed(4)}` };
-    const nextEnd = { lat: end[0], lng: end[1], label: `${end[0].toFixed(4)}, ${end[1].toFixed(4)}` };
+    const nextStart = {
+      lat: start[0],
+      lng: start[1],
+      label: `${start[0].toFixed(4)}, ${start[1].toFixed(4)}`,
+    };
+    const nextEnd = {
+      lat: end[0],
+      lng: end[1],
+      label: `${end[0].toFixed(4)}, ${end[1].toFixed(4)}`,
+    };
+
     setStartPoint(nextStart);
     setEndPoint(nextEnd);
     setStartQuery(nextStart.label);
@@ -45,50 +54,67 @@ export default function App() {
     setEndPoint(end);
     setStartQuery(start.label);
     setEndQuery(end.label);
+
     if (savedRoute) {
-      setRoutesGeojson({ type: "FeatureCollection", features: [savedRoute.geojsonFeature] });
+      setRoutesGeojson({
+        type: "FeatureCollection",
+        features: [savedRoute.geojsonFeature],
+      });
       setRoutesInfo([{ ...savedRoute.info, originalIndex: 0 }]);
       setHighlightedRoute(null);
       setStatus("done");
     } else {
-      setQuickPickRequest({ start: [start.lat, start.lng], end: [end.lat, end.lng], timestamp: Date.now() });
+      setQuickPickRequest({
+        start: [start.lat, start.lng],
+        end: [end.lat, end.lng],
+        timestamp: Date.now(),
+      });
     }
   };
 
-  const selectedRoute = highlightedRoute != null && routesGeojson?.features?.[highlightedRoute]
-    ? { geojsonFeature: routesGeojson.features[highlightedRoute], info: routesInfo[highlightedRoute] }
-    : null;
+  const selectedRoute =
+    highlightedRoute != null && routesGeojson?.features?.[highlightedRoute]
+      ? {
+          geojsonFeature: routesGeojson.features[highlightedRoute],
+          info: routesInfo[highlightedRoute],
+        }
+      : null;
 
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="header-dot" aria-hidden="true" />
         <h1>Urban Walking Route Explorer</h1>
-        <span className="subtitle">Compare walking routes by air quality, noise, and travel time around UCL.</span>
+        <span className="subtitle">
+          Compare walking routes by air quality, noise, and travel time around
+          UCL.
+        </span>
       </header>
 
-      <div className="app-main">
-        <MapView
-          routesGeojson={routesGeojson}
-          setRoutesGeojson={setRoutesGeojson}
-          routesInfo={routesInfo}
-          setRoutesInfo={setRoutesInfo}
-          loading={loading}
-          setLoading={setLoading}
-          highlightedRoute={highlightedRoute}
-          setHighlightedRoute={setHighlightedRoute}
-          status={status}
-          setStatus={setStatus}
-          quickPickRequest={quickPickRequest}
-          startPoint={startPoint}
-          endPoint={endPoint}
-          setStartPoint={setStartPoint}
-          setEndPoint={setEndPoint}
-          setStartQuery={setStartQuery}
-          setEndQuery={setEndQuery}
-          filterMode={filterMode}
-          displayOrder={displayOrder}
-        />
+      <main className="app-main" aria-label="Route planning workspace">
+        <section className="map-panel" aria-label="Map panel">
+          <MapView
+            routesGeojson={routesGeojson}
+            setRoutesGeojson={setRoutesGeojson}
+            routesInfo={routesInfo}
+            setRoutesInfo={setRoutesInfo}
+            loading={loading}
+            setLoading={setLoading}
+            highlightedRoute={highlightedRoute}
+            setHighlightedRoute={setHighlightedRoute}
+            status={status}
+            setStatus={setStatus}
+            quickPickRequest={quickPickRequest}
+            startPoint={startPoint}
+            endPoint={endPoint}
+            setStartPoint={setStartPoint}
+            setEndPoint={setEndPoint}
+            setStartQuery={setStartQuery}
+            setEndQuery={setEndQuery}
+            filterMode={filterMode}
+            displayOrder={displayOrder}
+          />
+        </section>
 
         <Sidebar
           status={status}
@@ -109,7 +135,7 @@ export default function App() {
           onLoadFavorite={handleLoadFavorite}
           selectedRoute={selectedRoute}
         />
-      </div>
+      </main>
     </div>
   );
 }

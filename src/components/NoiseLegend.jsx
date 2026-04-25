@@ -16,8 +16,8 @@ export default function NoiseLegend({
       style={{
         background: "rgba(255,255,255,0.93)",
         border: "1px solid #d1d5db",
-        borderRadius: 8,
-        padding: "10px 14px",
+        borderRadius: 12,
+        padding: "12px",
         fontSize: 12,
         color: "#1f2937",
         minWidth: 180,
@@ -32,10 +32,9 @@ export default function NoiseLegend({
           marginBottom: 8,
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: 13 }}>
-          High noise areas
-        </span>
-
+        <span style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>
+  High noise areas
+</span>
         <button
           type="button"
           onClick={onToggle}
@@ -115,24 +114,9 @@ export default function NoiseLegend({
         </div>
       )}
 
-      <p style={{ margin: "8px 0 0 0", fontSize: 11, color: "#6b7280" }}>
-        Source: Defra / GLA
-      </p>
+      
 
-      <a
-        href="https://data.london.gov.uk/dataset/noise-pollution-in-london-2zwnk"
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          display: "block",
-          marginTop: 3,
-          fontSize: 11,
-          color: "#6b7280",
-          textDecoration: "underline",
-        }}
-      >
-        View dataset (opens in a new tab)
-      </a>
+      
     </section>
   );
 }
