@@ -29,7 +29,7 @@ const SIMPLE_RASTER_STYLE = {
   ],
 };
 
-const CAMDEN_BOUNDARY_URL = "/data/camden_boundaryweb.geojson";
+const CAMDEN_BOUNDARY_URL = `${import.meta.env.BASE_URL}data/camden_boundaryweb.geojson`;
 
 const CAMDEN_BOUNDS = [
   [-0.2135, 51.5127], // west, south
