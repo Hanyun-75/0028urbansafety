@@ -93,7 +93,19 @@ const floatingStackRightStyle = {
   gap: 10,
   alignItems: "stretch",
 };
+function focusWithoutScroll(element) {
+  if (!element) return;
 
+  const x = window.scrollX;
+  const y = window.scrollY;
+
+  try {
+    element.focus({ preventScroll: true });
+  } catch {
+    element.focus();
+    window.scrollTo(x, y);
+  }
+}
 
 function getRouteLayerStyle(index, highlightedRoute, displayIdx) {
   const isHighlighted = highlightedRoute === index;
@@ -637,17 +649,11 @@ useEffect(() => {
 
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
-      mapSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-
-      mapLegendToggleRef.current?.focus({ preventScroll: true });
+      focusWithoutScroll(mapLegendToggleRef.current);
     });
   });
-
-  setAnnouncement("Map legend opened.");
 }, [focusRequest, routeCount]);
+
  const canCompute = startPoint && endPoint && !loading;
 
 const mapHint = !startPoint

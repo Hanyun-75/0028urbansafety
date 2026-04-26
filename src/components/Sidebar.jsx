@@ -436,10 +436,15 @@ export default function Sidebar({
 
       <div style={{ padding: "0 20px 8px" }}>
         
-       <button
+      <button
   type="button"
-  onClick={() => onRequestFocus?.("mapLegend")}
-  disabled={!canJumpToMapLegend}
+  onClick={(event) => {
+    event.preventDefault();
+
+    if (!canJumpToMapLegend) return;
+
+    onRequestFocus?.("mapLegend");
+  }}
   aria-disabled={!canJumpToMapLegend}
   aria-label="Jump to the map legend on the map"
   style={{
