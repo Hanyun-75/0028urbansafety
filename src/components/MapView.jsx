@@ -67,17 +67,15 @@ const floatingCardStyle = {
   background: "rgba(255,255,255,0.93)",
   border: "1px solid #d1d5db",
   borderRadius: 12,
-  padding: "12px",
   fontSize: 12,
   color: "#1f2937",
-  minWidth: 220,
   boxShadow: "0 1px 4px rgba(15,23,42,0.08)",
 };
 
 const floatingStackLeftStyle = {
   position: "absolute",
-  left: 12,
-  bottom: 24,
+  left: "var(--map-overlay-edge)",
+  bottom: "var(--map-overlay-left-bottom)",
   zIndex: 10,
   display: "flex",
   flexDirection: "column",
@@ -87,8 +85,8 @@ const floatingStackLeftStyle = {
 
 const floatingStackRightStyle = {
   position: "absolute",
-  right: 12,
-  bottom: 56,
+  right: "var(--map-overlay-edge)",
+  bottom: "var(--map-overlay-right-bottom)",
   zIndex: 10,
   display: "flex",
   flexDirection: "column",
@@ -201,23 +199,41 @@ export default function MapView({
   setEndQuery,
   filterMode,
   displayOrder,
+  focusRequest,
+  onRequestFocus,
 }) {
   const mapRef = useRef(null);
+  const mapSectionRef = useRef(null);
+
   const requestIdRef = useRef(0);
   const laeiReadyRef = useRef(false);
+const computeButtonRef = useRef(null);
+const mapLegendToggleRef = useRef(null);
+const [showNoise, setShowNoise] = useState(false);
+const [noiseOpacity, setNoiseOpacity] = useState(0.55);
+const [focusStudyArea, setFocusStudyArea] = useState(true);
 
-  const [showNoise, setShowNoise] = useState(false);
-  const [noiseOpacity, setNoiseOpacity] = useState(0.55);
-  const [focusStudyArea, setFocusStudyArea] = useState(true);
-  const [showDataSources, setShowDataSources] = useState(true);
+const [showStudyAreaCard, setShowStudyAreaCard] = useState(true);
+const [showMapLegend, setShowMapLegend] = useState(true);
+const [showDataSources, setShowDataSources] = useState(true);
 
-  const [camdenGeojson, setCamdenGeojson] = useState(null);
-  const [camdenMaskGeojson, setCamdenMaskGeojson] = useState(null);
+const [isCompactScreen, setIsCompactScreen] = useState(() => {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(max-width: 680px)").matches;
+});
 
-  const [announcement, setAnnouncement] = useState(
-    "Interactive route map ready. Focused on Camden study area."
-  );
-  const [errorMessage, setErrorMessage] = useState("");
+const [isConstrainedViewport, setIsConstrainedViewport] = useState(() => {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(max-width: 1280px), (max-height: 900px)").matches;
+});
+
+const [camdenGeojson, setCamdenGeojson] = useState(null);
+const [camdenMaskGeojson, setCamdenMaskGeojson] = useState(null);
+
+const [announcement, setAnnouncement] = useState(
+  "Interactive route map ready. Focused on Camden study area."
+);
+const [errorMessage, setErrorMessage] = useState("");
 
   const routeCount = routesGeojson?.features?.length ?? 0;
   const safeRoutesInfo = routesInfo || [];
@@ -447,6 +463,7 @@ const fetchRoute = async (customStart = null, customEnd = null) => {
     setRoutesInfo(parsedRoutes);
     setStatus?.("done");
     setAnnouncement(`${parsedRoutes.length} routes loaded for comparison.`);
+    onRequestFocus?.("resultsFilters");
   } catch (error) {
     if (requestId !== requestIdRef.current) return;
 
@@ -494,6 +511,82 @@ const fetchRoute = async (customStart = null, customEnd = null) => {
       cancelled = true;
     };
   }, []);
+useEffect(() => {
+  if (!focusRequest) return;
+
+  if (focusRequest.target === "compute") {
+    window.requestAnimationFrame(() => {
+      computeButtonRef.current?.focus();
+    });
+  }
+
+  if (focusRequest.target === "mapLegend") {
+    window.requestAnimationFrame(() => {
+      mapLegendToggleRef.current?.focus();
+    });
+  }
+}, [focusRequest]);
+useEffect(() => {
+  const compactQuery = window.matchMedia("(max-width: 680px)");
+  const constrainedQuery = window.matchMedia(
+    "(max-width: 1280px), (max-height: 900px)"
+  );
+
+  const updateViewportFlags = () => {
+    const compact = compactQuery.matches;
+    const constrained = compact || constrainedQuery.matches;
+
+    setIsCompactScreen(compact);
+    setIsConstrainedViewport(constrained);
+  };
+
+  updateViewportFlags();
+
+  if (compactQuery.addEventListener && constrainedQuery.addEventListener) {
+    compactQuery.addEventListener("change", updateViewportFlags);
+    constrainedQuery.addEventListener("change", updateViewportFlags);
+
+    return () => {
+      compactQuery.removeEventListener("change", updateViewportFlags);
+      constrainedQuery.removeEventListener("change", updateViewportFlags);
+    };
+  }
+
+  compactQuery.addListener(updateViewportFlags);
+  constrainedQuery.addListener(updateViewportFlags);
+
+  return () => {
+    compactQuery.removeListener(updateViewportFlags);
+    constrainedQuery.removeListener(updateViewportFlags);
+  };
+}, []);
+
+const viewportModeRef = useRef(null);
+
+useEffect(() => {
+  const nextMode = isCompactScreen
+    ? "compact"
+    : isConstrainedViewport
+    ? "constrained"
+    : "full";
+
+  if (viewportModeRef.current === nextMode) return;
+
+  if (nextMode === "full") {
+    setShowStudyAreaCard(true);
+    setShowMapLegend(true);
+    setShowDataSources(true);
+  } else {
+    setShowStudyAreaCard(false);
+    setShowMapLegend(false);
+    setShowDataSources(false);
+  }
+
+  viewportModeRef.current = nextMode;
+}, [isCompactScreen, isConstrainedViewport]);
+
+
+  
 
   useEffect(() => {
     if (!quickPickRequest) return;
@@ -536,20 +629,139 @@ reverseGeocode(endLat, endLng).then((name) => {
 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickPickRequest]);
+useEffect(() => {
+  if (!focusRequest || focusRequest.target !== "mapLegend") return;
+  if (routeCount <= 0) return;
 
-  const canCompute = startPoint && endPoint && !loading;
-  const mapHint = !startPoint
-    ? "Click on the map to set a start point"
-    : !endPoint
-    ? "Now click to set an end point"
-    : "Start and end points are ready";
-  
+  setShowMapLegend(true);
 
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      mapSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+
+      mapLegendToggleRef.current?.focus({ preventScroll: true });
+    });
+  });
+
+  setAnnouncement("Map legend opened.");
+}, [focusRequest, routeCount]);
+ const canCompute = startPoint && endPoint && !loading;
+
+const mapHint = !startPoint
+  ? "Click on the map to set a start point"
+  : !endPoint
+  ? "Now click to set an end point"
+  : "Start and end points are ready";
+
+const expandedInfoCardWidth = isCompactScreen
+  ? "min(200px, calc(100vw - 24px))"
+  : isConstrainedViewport
+  ? "min(220px, calc(100vw - 24px))"
+  : "min(var(--info-card-width), calc(100vw - 24px))";
+
+const buildInfoCardStyle = (isOpen) => ({
+  ...floatingCardStyle,
+  padding: isOpen ? "12px" : "10px 12px",
+  width: isOpen ? expandedInfoCardWidth : "fit-content",
+  maxWidth: "calc(100vw - 24px)",
+  minWidth: isOpen ? expandedInfoCardWidth : "unset",
+});
+
+const overlayHeaderRowStyle = (isOpen) => ({
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 8,
+  marginBottom: isOpen ? 10 : 0,
+});
+
+const overlayTitleStyle = {
+  margin: 0,
+  fontWeight: 700,
+  fontSize: 14,
+  color: "#0f172a",
+  lineHeight: 1.3,
+};
+
+const buildOverlayToggleButtonStyle = (isOpen) => ({
+  minHeight: 32,
+  padding: "4px 10px",
+  fontSize: 11,
+  borderRadius: 999,
+  border: "1px solid #d1d5db",
+  background: isOpen ? "#f3f4f6" : "#1d4ed8",
+  color: isOpen ? "#374151" : "#ffffff",
+  cursor: "pointer",
+  fontWeight: 600,
+  flexShrink: 0,
+});
+
+const shouldShowMapHint = !isCompactScreen;
+
+const shouldPrioritiseMapLegend = isCompactScreen && showMapLegend;
+const shouldRenderStudyAreaCard = !shouldPrioritiseMapLegend;
+
+const mapLegendStackStyle = shouldPrioritiseMapLegend
+  ? {
+      position: "absolute",
+      top: 12,
+      left: 12,
+      zIndex: 11,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      alignItems: "flex-start",
+    }
+  : floatingStackLeftStyle;
+
+const rightOverlayStackStyle = {
+  ...floatingStackRightStyle,
+  ...(isConstrainedViewport
+    ? {
+        top: 12,
+        bottom: "auto",
+      }
+    : {
+        top: "auto",
+        bottom: "var(--map-overlay-right-bottom)",
+      }),
+};
+
+const handleToggleStudyAreaCard = () => {
+  const next = !showStudyAreaCard;
+  setShowStudyAreaCard(next);
+  setAnnouncement(
+    next ? "Study area information shown." : "Study area information hidden."
+  );
+};
+
+const handleToggleMapLegend = () => {
+  const next = !showMapLegend;
+
+  if (isCompactScreen && next) {
+    setShowStudyAreaCard(false);
+    setShowDataSources(false);
+  }
+
+  setShowMapLegend(next);
+  setAnnouncement(next ? "Map legend shown." : "Map legend hidden.");
+};
+
+const handleToggleDataSources = () => {
+  const next = !showDataSources;
+  setShowDataSources(next);
+  setAnnouncement(next ? "Data sources shown." : "Data sources hidden.");
+};
 
   return (
-    <section
+  <section
+  ref={mapSectionRef}
   aria-labelledby="route-map-heading"
   aria-describedby="route-map-description"
+  aria-busy={loading}
   style={{
     flex: 1,
     display: "flex",
@@ -564,9 +776,10 @@ reverseGeocode(endLat, endLng).then((name) => {
       </h2>
 
       <p id="route-map-description" style={srOnlyStyle}>
-        The map is focused on the Camden study area. Areas outside Camden are
-        visually de-emphasised to clarify data coverage. Route details remain
-        available in text outside the map.
+        Interactive map focused on the Camden study area. You can click the map to
+  place start and end points, or use the search boxes in the sidebar. Areas
+  outside Camden are visually de-emphasised to clarify data coverage. Route
+  details and comparisons are also available as text outside the map.
       </p>
 
       <div aria-live="polite" aria-atomic="true" style={srOnlyStyle}>
@@ -590,13 +803,13 @@ reverseGeocode(endLat, endLng).then((name) => {
       )}
 
       <div
-        style={{
-          position: "relative",
-          flex: 1,
-          overflow: "hidden",
-          minHeight: 320,
-        }}
-      >
+  style={{
+    position: "relative",
+    flex: 1,
+    overflow: "hidden",
+    minHeight: "var(--map-canvas-min-height, 320px)",
+  }}
+>
         <Map
           id="route-map"
           ref={mapRef}
@@ -653,7 +866,7 @@ reverseGeocode(endLat, endLng).then((name) => {
             </Source>
           )}
 
-          {routesGeojson?.features?.map((feature, index) => {
+          {routesGeojson?.features?.filter(Boolean).map((feature, index) => {
             const dIdx = displayOrder?.[index] ?? index;
             return (
               <Source
@@ -765,279 +978,303 @@ reverseGeocode(endLat, endLng).then((name) => {
             );
           })}
         </Map>
-        {routeCount > 0 && (
-          
-  <div style={floatingStackLeftStyle}>
-  <section
-  aria-labelledby="map-legend-heading"
-  style={{
-    ...floatingCardStyle,
-    width: 286,
-    maxWidth: "calc(100vw - 32px)",
-  }}
+
+{routeCount > 0 && (
+  <div style={mapLegendStackStyle}>
+    <section
+      aria-labelledby="map-legend-heading"
+      style={buildInfoCardStyle(showMapLegend)}
+    >
+      <div style={overlayHeaderRowStyle(showMapLegend)}>
+        <h2 id="map-legend-heading" style={overlayTitleStyle}>
+          Map legend
+        </h2>
+
+        <button
+  ref={mapLegendToggleRef}
+  type="button"
+  onClick={() => setShowMapLegend((prev) => !prev)}
+  aria-expanded={showMapLegend}
+  aria-controls="map-legend-panel"
+  aria-label={showMapLegend ? "Hide map legend" : "Show map legend"}
+  style={buildOverlayToggleButtonStyle(showMapLegend)}
 >
-    <h2
-  id="map-legend-heading"
-  style={{
-    margin: "0 0 10px 0",
-    fontWeight: 700,
-    fontSize: 14,
-    color: "#0f172a",
-    lineHeight: 1.3,
-  }}
->
-      Map legend
-    </h2>
+  {showMapLegend ? "Hide" : "Show"}
+</button>
+      </div>
 
-    <div style={{ marginBottom: 14 }}>
-      <h3
-  style={{
-    margin: "0 0 6px 0",
-    fontWeight: 700,
-    fontSize: 12,
-    color: "#475569",
-    lineHeight: 1.4,
-  }}
->
-        Hazard points
-      </h3>
-
-      <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-        }}
-      >
-        <li
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            marginBottom: 6,
-            fontSize: 12,
-            color: "#334155",
-            lineHeight: 1.45,
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: "999px",
-              background: "#dc2626",
-              border: "1.5px solid white",
-              boxShadow: "0 0 0 1px #cbd5e1",
-              flexShrink: 0,
-              marginTop: 3,
-            }}
-          />
-          <span>
-            Air hazard point: NO₂ &gt; 40 μg/m³ or PM2.5 &gt; 15 μg/m³
-          </span>
-        </li>
-
-        <li
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            fontSize: 12,
-            color: "#334155",
-            lineHeight: 1.45,
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: "999px",
-              background: "#d97706",
-              border: "1.5px solid white",
-              boxShadow: "0 0 0 1px #cbd5e1",
-              flexShrink: 0,
-              marginTop: 3,
-            }}
-          />
-          <span>Noise hazard point: ≥ 75 dB</span>
-        </li>
-      </ul>
-    </div>
-
-    <div>
-      <h3
-  style={{
-    margin: "0 0 6px 0",
-    fontWeight: 700,
-    fontSize: 12,
-    color: "#475569",
-    lineHeight: 1.4,
-  }}
->
-        Routes
-      </h3>
-
-      <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-        }}
-      >
-        {safeRoutesInfo.slice(0, 3).map((route, index) => {
-          const idx = route?.originalIndex ?? index;
-          const dIdx = displayOrder?.[idx] ?? idx;
-          const color = ROUTE_COLORS[dIdx % ROUTE_COLORS.length];
-          const isSelected = highlightedRoute === idx;
-
-          return (
-            <li
-              key={`legend-route-${idx}`}
+      {showMapLegend && (
+        <div id="map-legend-panel">
+          <div style={{ marginBottom: 14 }}>
+            <h3
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: index === safeRoutesInfo.slice(0, 3).length - 1 ? 0 : 8,
+                margin: "0 0 6px 0",
+                fontWeight: 700,
                 fontSize: 12,
-                color: "#334155",
-                lineHeight: 1.45,
+                color: "#475569",
+                lineHeight: 1.4,
               }}
             >
-              <span
-                aria-hidden="true"
-                style={{
-                  display: "inline-block",
-                  width: 20,
-                  height: 0,
-                  borderTop: isSelected
-                    ? `3px solid ${color}`
-                    : `3px dashed ${color}`,
-                  flexShrink: 0,
-                }}
-              />
-              <span>
-                {route?.name || `Route ${String.fromCharCode(65 + dIdx)}`}
-                {isSelected ? " (selected)" : ""}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  </section>
-</div>
-)}
+              Hazard points
+            </h3>
 
-        <aside
-  style={{
-    ...floatingCardStyle,
-    position: "absolute",
-    top: 12,
-    left: 12,
-    zIndex: 10,
-    width: 280,
-    maxWidth: "calc(100vw - 32px)",
-    color: "#0f172a",
-  }}
->
-  <div
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              <li
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  marginBottom: 6,
+                  fontSize: 12,
+                  color: "#334155",
+                  lineHeight: 1.45,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "999px",
+                    background: "#dc2626",
+                    border: "1.5px solid white",
+                    boxShadow: "0 0 0 1px #cbd5e1",
+                    flexShrink: 0,
+                    marginTop: 3,
+                  }}
+                />
+                <span>
+                  Air hazard point: NO₂ &gt; 40 μg/m³ or PM2.5 &gt; 15 μg/m³
+                </span>
+              </li>
+
+              <li
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  fontSize: 12,
+                  color: "#334155",
+                  lineHeight: 1.45,
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "999px",
+                    background: "#d97706",
+                    border: "1.5px solid white",
+                    boxShadow: "0 0 0 1px #cbd5e1",
+                    flexShrink: 0,
+                    marginTop: 3,
+                  }}
+                />
+                <span>Noise hazard point: ≥ 75 dB</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3
+              style={{
+                margin: "0 0 6px 0",
+                fontWeight: 700,
+                fontSize: 12,
+                color: "#475569",
+                lineHeight: 1.4,
+              }}
+            >
+              Routes
+            </h3>
+
+            <ul
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+              }}
+            >
+              {safeRoutesInfo.slice(0, 3).map((route, index) => {
+                const idx = route?.originalIndex ?? index;
+                const dIdx = displayOrder?.[idx] ?? idx;
+                const color = ROUTE_COLORS[dIdx % ROUTE_COLORS.length];
+                const isSelected = highlightedRoute === idx;
+
+                return (
+                  <li
+                    key={`legend-route-${idx}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom:
+                        index === safeRoutesInfo.slice(0, 3).length - 1 ? 0 : 8,
+                      fontSize: 12,
+                      color: "#334155",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: "inline-block",
+                        width: 20,
+                        height: 0,
+                        borderTop: isSelected
+                          ? `3px solid ${color}`
+                          : `3px dashed ${color}`,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span>
+                      {route?.name || `Route ${String.fromCharCode(65 + dIdx)}`}
+                      {isSelected ? " (selected)" : ""}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      )}
+    </section>
+  </div>
+)}
+        {shouldRenderStudyAreaCard && (
+  <aside
+    aria-labelledby="study-area-heading"
     style={{
-      fontSize: 14,
-      fontWeight: 700,
-      lineHeight: 1.3,
-      marginBottom: 6,
+      ...buildInfoCardStyle(showStudyAreaCard),
+      position: "absolute",
+      top: 12,
+      left: 12,
+      zIndex: 10,
       color: "#0f172a",
     }}
   >
-    Study area: Camden
-  </div>
+    <div style={overlayHeaderRowStyle(showStudyAreaCard)}>
+      <h2 id="study-area-heading" style={overlayTitleStyle}>
+        Study area: Camden
+      </h2>
+
+      <button
+        type="button"
+        onClick={handleToggleStudyAreaCard}
+        aria-expanded={showStudyAreaCard}
+        aria-controls="study-area-panel"
+        aria-label={
+          showStudyAreaCard
+            ? "Hide study area information"
+            : "Show study area information"
+        }
+        style={buildOverlayToggleButtonStyle(showStudyAreaCard)}
+      >
+        {showStudyAreaCard ? "Hide" : "Show"}
+      </button>
+    </div>
+
+    {showStudyAreaCard && (
+      <div
+        id="study-area-panel"
+        style={{
+          fontSize: 12,
+          lineHeight: 1.45,
+          color: "#334155",
+        }}
+      >
+        Areas outside the current study area are visually de-emphasised to clarify
+        data coverage and keep route comparison focused.
+      </div>
+    )}
+  </aside>
+)}
+  {shouldShowMapHint && (
   <div
+    aria-hidden="true"
     style={{
-      fontSize: 12,
-      lineHeight: 1.45,
-      color: "#334155",
+      position: "absolute",
+      top: 12,
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "rgba(15,23,42,0.88)",
+      color: "white",
+      fontSize: 13,
+      padding: "7px 14px",
+      borderRadius: 999,
+      pointerEvents: "none",
+      whiteSpace: "nowrap",
+      maxWidth: "90%",
     }}
   >
-    Areas outside the current study area are visually de-emphasised to clarify
-    data coverage and keep route comparison focused.
+    {mapHint}
   </div>
-</aside>
+)}
 
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            top: 12,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(15,23,42,0.88)",
-            color: "white",
-            fontSize: 13,
-            padding: "7px 14px",
-            borderRadius: 999,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-            maxWidth: "90%",
-          }}
-        >
-          {mapHint}
-        </div>
-
-        <div style={floatingStackRightStyle}>
- <DataSourcesCard
+<div style={rightOverlayStackStyle}>
+  <DataSourcesCard
   isOpen={showDataSources}
+  expandedWidth={expandedInfoCardWidth}
+  onToggle={handleToggleDataSources}
+/>
+
+  <NoiseLegend
+  show={showNoise}
   onToggle={() => {
-    setShowDataSources((prev) => {
+    setShowNoise((prev) => {
       const next = !prev;
       setAnnouncement(
-        next ? "Data sources shown." : "Data sources hidden."
+        next ? "Noise layer turned on." : "Noise layer turned off."
       );
       return next;
     });
   }}
+  opacity={noiseOpacity}
+  onOpacityChange={(value) => {
+    setNoiseOpacity(value);
+    setAnnouncement(
+      `Noise layer opacity changed to ${Math.round(value * 100)} percent.`
+    );
+  }}
+  isConstrainedViewport={isConstrainedViewport}
+  isCompactScreen={isCompactScreen}
 />
-
-  <NoiseLegend
-    show={showNoise}
-    onToggle={() => {
-      setShowNoise((prev) => {
-        const next = !prev;
-        setAnnouncement(
-          next ? "Noise layer turned on." : "Noise layer turned off."
-        );
-        return next;
-      });
-    }}
-    opacity={noiseOpacity}
-    onOpacityChange={(value) => {
-      setNoiseOpacity(value);
-      setAnnouncement(
-        `Noise layer opacity changed to ${Math.round(value * 100)} percent.`
-      );
-    }}
-  />
 </div>
+
+
+
       </div>
 
+      <p id="map-controls-help" style={srOnlyStyle}>
+  Use these controls to calculate routes, reset the map, centre the study area,
+  zoom in or out, and toggle the Camden study-area focus.
+</p>
       <div
-        role="group"
-        aria-label="Map controls"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 16px",
-          background: "white",
-          borderTop: "1px solid #e2e8f0",
-          flexShrink: 0,
-        }}
-      >
+  role="group"
+  aria-label="Map controls"
+  aria-describedby="map-controls-help"
+  style={{
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 10,
+    padding: "12px 16px",
+    background: "white",
+    borderTop: "1px solid #e2e8f0",
+    flexShrink: 0,
+  }}
+>
         <button
+          ref={computeButtonRef}
           type="button"
           onClick={() => fetchRoute()}
           disabled={!canCompute}

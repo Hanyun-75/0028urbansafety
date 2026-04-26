@@ -1,5 +1,11 @@
 :root {
   color-scheme: light;
+
+  --map-overlay-edge: 12px;
+  --map-overlay-left-bottom: 24px;
+  --map-overlay-right-bottom: 68px;
+  --info-card-width: 260px;
+  --map-canvas-min-height: 320px;
 }
 
 *,
@@ -13,6 +19,7 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  padding: 0;
 }
 
 body {
@@ -29,7 +36,8 @@ button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input[type="range"]:focus-visible {
   outline: 3px solid #2563eb;
   outline-offset: 2px;
 }
@@ -43,13 +51,24 @@ a:focus-visible {
   overflow: hidden;
   background: #f8fafc;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Header */
 .app-header {
   background: #1e293b;
   color: white;
   padding: 0 20px;
-  height: 56px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -69,16 +88,12 @@ a:focus-visible {
 .app-header .subtitle {
   font-size: 12px;
   color: #cbd5e1;
-  margin-left: 4px;
+  margin: 0 0 0 4px;
   line-height: 1.4;
 }
-
+/* Hide old green dot just in case */
 .app-header .header-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #22c55e;
-  flex-shrink: 0;
+  display: none;
 }
 
 /* Main layout */
@@ -90,13 +105,10 @@ a:focus-visible {
   background: #f8fafc;
 }
 
-
-/* Left map panel
-   IMPORTANT: this must be a flex container,
-   otherwise MapView's own flex:1 will not work. */
+/* Left map panel */
 .map-panel {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -105,9 +117,9 @@ a:focus-visible {
 
 /* Right sidebar */
 .app-main > aside {
-  width: 380px;
-  max-width: 42vw;
+  width: 360px;
   min-width: 320px;
+  max-width: 400px;
   min-height: 0;
   flex-shrink: 0;
   overflow-y: auto;
@@ -137,10 +149,16 @@ a:focus-visible {
 }
 
 /* Slightly tighter desktop / laptop layout */
-@media (max-width: 1200px) {
+@media (max-width: 1280px), (max-height: 900px) {
+  :root {
+    --info-card-width: 220px;
+    --map-overlay-right-bottom: 64px;
+  }
+
   .app-main > aside {
-    width: 360px;
-    max-width: 44vw;
+    width: 340px;
+    min-width: 300px;
+    max-width: 380px;
   }
 
   .app-header {
@@ -150,6 +168,13 @@ a:focus-visible {
 
 /* Narrower screens */
 @media (max-width: 960px) {
+  :root {
+    --info-card-width: 220px;
+    --map-overlay-edge: 10px;
+    --map-overlay-left-bottom: 20px;
+    --map-overlay-right-bottom: 60px;
+  }
+
   .app-header {
     min-height: 64px;
     padding: 8px 14px;
@@ -163,36 +188,131 @@ a:focus-visible {
   }
 
   .app-header .subtitle {
-    margin-left: 0;
+    margin: 0;
     width: 100%;
     font-size: 11px;
     color: #dbeafe;
   }
 
   .app-main > aside {
-    width: 340px;
-    max-width: 46vw;
-    min-width: 300px;
+    width: 320px;
+    min-width: 280px;
+    max-width: 360px;
   }
 }
 
-/* Early mobile fallback */
+/* Mobile / very narrow screens */
 @media (max-width: 760px) {
+  :root {
+    --info-card-width: 200px;
+    --map-overlay-edge: 8px;
+    --map-overlay-left-bottom: 16px;
+    --map-overlay-right-bottom: 56px;
+    --map-canvas-min-height: 260px;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    position: static;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .app-main {
     flex-direction: column;
+    overflow: visible;
   }
 
   .map-panel {
-    flex: 1 1 55%;
-    min-height: 260px;
+    flex: none;
+    height: 360px;
+    min-height: 320px;
   }
 
   .app-main > aside {
     width: 100%;
-    max-width: none;
     min-width: 0;
+    max-width: none;
     min-height: 220px;
     border-left: none;
     border-top: 1px solid #e2e8f0;
+    overflow: visible;
+  }
+}
+
+a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover,
+a:focus-visible {
+  color: #1d4ed8;
+}
+
+input[type="range"]:focus-visible {
+  outline: 3px solid #111827;
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  width: auto;
+  height: auto;
+  padding: 0.75rem 1rem;
+  background: #ffffff;
+  color: #111827;
+  border: 2px solid #111827;
+  z-index: 1000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

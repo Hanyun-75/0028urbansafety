@@ -1,10 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import SearchBox from "./SearchBox";
 import RouteCards from "./RouteCards";
 import Feedback from "./Feedback";
 import Favorites from "./Favorites";
-import { useState, useEffect, useRef } from "react";
-
-
 
 const QUICK_PICKS = [
   {
@@ -19,7 +17,7 @@ const QUICK_PICKS = [
   },
   {
     label: "Camden Market to Primrose Hill",
-    start: [51.5415, -0.1420],
+    start: [51.5415, -0.142],
     end: [51.5387, -0.1516],
   },
   {
@@ -53,7 +51,7 @@ function Divider() {
   return (
     <div
       aria-hidden="true"
-      style={{ height: 1, background: "#f1f5f9", margin: "16px 0" }}
+      style={{ height: 1, background: "#e2e8f0", margin: "16px 0" }}
     />
   );
 }
@@ -65,7 +63,7 @@ function SectionHeading({ id, children }) {
       style={{
         fontSize: 12,
         fontWeight: 700,
-        color: "#94a3b8",
+        color: "#475569",
         textTransform: "uppercase",
         letterSpacing: "0.05em",
         margin: "0 0 10px 0",
@@ -93,100 +91,192 @@ export default function Sidebar({
   selectedRoute,
   onFilterChange,
   onDisplayOrderChange,
+  focusRequest,
+  onRequestFocus,
 }) {
+  const [noteRoute, setNoteRoute] = useState(null);
+  const [pendingSavedRoute, setPendingSavedRoute] = useState(null);
+  const [dismissedQuickPickLabel, setDismissedQuickPickLabel] = useState(null);
 
+  const resultsFirstFilterRef = useRef(null);
+  const routeNoteRef = useRef(null);
+  const resultsRef = useRef(null);
+  const previousStatusRef = useRef(status);
+  const sidebarRootRef = useRef(null);
+  const canJumpToMapLegend = status === "done" && routes?.length > 0;
 
+  const [isCompactScreen, setIsCompactScreen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 680px)").matches;
+  });
 
-const [noteRoute, setNoteRoute] = useState(null);
-const [pendingSavedRoute, setPendingSavedRoute] = useState(null);
-const [dismissedQuickPickLabel, setDismissedQuickPickLabel] = useState(null);
+  useEffect(() => {
+    setNoteRoute(null);
+  }, [routes]);
 
-const routeNoteRef = useRef(null);
-const resultsRef = useRef(null);
-const previousStatusRef = useRef(status);
-const sidebarRef = useRef(null);
-useEffect(() => {
-  setNoteRoute(null);
-}, [routes]);
+  const matchedQuickPickLabel =
+    QUICK_PICKS.find((qp) => matchesQuickPick(startPoint, endPoint, qp))
+      ?.label ?? null;
 
-const matchedQuickPickLabel =
-  QUICK_PICKS.find((qp) => matchesQuickPick(startPoint, endPoint, qp))?.label ??
-  null;
+  const activeQuickPickLabel =
+    matchedQuickPickLabel &&
+    matchedQuickPickLabel !== dismissedQuickPickLabel
+      ? matchedQuickPickLabel
+      : null;
 
-const activeQuickPickLabel =
-  matchedQuickPickLabel &&
-  matchedQuickPickLabel !== dismissedQuickPickLabel
-    ? matchedQuickPickLabel
-    : null;
-useEffect(() => {
-  const becameDone =
-    previousStatusRef.current !== "done" && status === "done";
+  const focusWithoutPageJump = (element) => {
+    if (!element) return;
 
-  if (becameDone && routes?.length) {
+    try {
+      element.focus({ preventScroll: true });
+    } catch {
+      element.focus();
+    }
+  };
+
+  const getSidebarScrollContainer = () => {
+    const root = sidebarRootRef.current;
+    if (!root) return null;
+
+    return root.closest("aside") || root.parentElement || root;
+  };
+
+  const scrollSidebarTo = (targetRef) => {
+    const targetEl = targetRef.current;
+    if (!targetEl) return;
+
+    if (isCompactScreen) {
+      targetEl.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    const sidebarEl = getSidebarScrollContainer();
+    if (!sidebarEl) return;
+
+    const rootRect = sidebarEl.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+    const offset = targetRect.top - rootRect.top + sidebarEl.scrollTop - 8;
+
+    sidebarEl.scrollTo({
+      top: Math.max(offset, 0),
+      behavior: "smooth",
+    });
+  };
+
+  useEffect(() => {
+  if (!focusRequest) return;
+
+  if (
+    focusRequest.target === "results" &&
+    status === "done" &&
+    routes?.length
+  ) {
     window.requestAnimationFrame(() => {
       scrollSidebarTo(resultsRef);
+      resultsRef.current?.focus({ preventScroll: true });
     });
   }
+}, [focusRequest, status, routes, isCompactScreen]);
 
-  previousStatusRef.current = status;
-}, [status, routes]);
-useEffect(() => {
-  if (!dismissedQuickPickLabel) return;
+  useEffect(() => {
+  if (!focusRequest) return;
 
-  if (matchedQuickPickLabel !== dismissedQuickPickLabel) {
+  if (
+    focusRequest.target === "resultsFilters" &&
+    status === "done" &&
+    routes?.length
+  ) {
+    window.requestAnimationFrame(() => {
+      scrollSidebarTo(resultsRef);
+      resultsFirstFilterRef.current?.focus({ preventScroll: true });
+    });
+  }
+}, [focusRequest, status, routes, isCompactScreen]);
+
+  useEffect(() => {
+    const becameDone =
+      previousStatusRef.current !== "done" && status === "done";
+
+    if (becameDone && routes?.length) {
+      window.requestAnimationFrame(() => {
+        scrollSidebarTo(resultsRef);
+      });
+    }
+
+    previousStatusRef.current = status;
+  }, [status, routes]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 680px)");
+
+    const handleChange = (event) => {
+      setIsCompactScreen(event.matches);
+    };
+
+    setIsCompactScreen(mediaQuery.matches);
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleChange);
+      return () => mediaQuery.removeEventListener("change", handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  useEffect(() => {
+    if (!dismissedQuickPickLabel) return;
+
+    if (matchedQuickPickLabel !== dismissedQuickPickLabel) {
+      setDismissedQuickPickLabel(null);
+    }
+  }, [matchedQuickPickLabel, dismissedQuickPickLabel]);
+
+  const handleOpenNote = (target) => {
+    setNoteRoute(target);
+
+    window.requestAnimationFrame(() => {
+      scrollSidebarTo(routeNoteRef);
+
+      window.requestAnimationFrame(() => {
+        focusWithoutPageJump(routeNoteRef.current);
+      });
+    });
+  };
+
+  const handleQuickPickClick = (qp) => {
+    const isCurrentlyActive = activeQuickPickLabel === qp.label;
+
+    if (isCurrentlyActive) {
+      setDismissedQuickPickLabel(qp.label);
+      return;
+    }
+
     setDismissedQuickPickLabel(null);
-  }
-}, [matchedQuickPickLabel, dismissedQuickPickLabel]);
+    onQuickPick(qp.start, qp.end);
+  };
+  
+  const handleLoadFavoriteFromSidebar = (start, end, savedRoute = null) => {
+  const matchingQuickPickLabel =
+    QUICK_PICKS.find((qp) => matchesQuickPick(start, end, qp))?.label ?? null;
 
-const scrollSidebarTo = (targetRef) => {
-  const sidebarEl = sidebarRef.current;
-  const targetEl = targetRef.current;
-
-  if (!sidebarEl || !targetEl) return;
-
-  const top = targetEl.offsetTop - 8;
-
-  sidebarEl.scrollTo({
-    top: Math.max(top, 0),
-    behavior: "smooth",
-  });
+  setDismissedQuickPickLabel(matchingQuickPickLabel);
+  onLoadFavorite(start, end, savedRoute);
 };
-
-const handleOpenNote = (target) => {
-  setNoteRoute(target);
-
-  window.requestAnimationFrame(() => {
-    scrollSidebarTo(routeNoteRef);
-  });
-};
-const handleQuickPickClick = (qp) => {
-  const isCurrentlyActive = activeQuickPickLabel === qp.label;
-
-  if (isCurrentlyActive) {
-    setDismissedQuickPickLabel(qp.label);
-    return;
-  }
-
-  setDismissedQuickPickLabel(null);
-  onQuickPick(qp.start, qp.end);
-};
-
 
   return (
-<aside
-  ref={sidebarRef}
-  aria-label="Route planner"
-  style={{
-    width: 380,
-    flexShrink: 0,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    background: "white",
-    borderLeft: "1px solid #e2e8f0",
-    overflowY: "auto",
-  }}
->
+    <div
+      ref={sidebarRootRef}
+      style={{
+        minHeight: "100%",
+        display: "flex",
+        flexDirection: "column",
+        background: "white",
+      }}
+    >
       <div
         style={{
           padding: "12px 20px",
@@ -197,7 +287,7 @@ const handleQuickPickClick = (qp) => {
         <p
           style={{
             fontSize: 12,
-            color: "#64748b",
+            color: "#475569",
             lineHeight: 1.5,
             margin: 0,
           }}
@@ -217,7 +307,7 @@ const handleQuickPickClick = (qp) => {
         <p
           style={{
             fontSize: 13,
-            color: "#64748b",
+            color: "#475569",
             marginTop: 0,
             marginBottom: 14,
             lineHeight: 1.5,
@@ -247,121 +337,147 @@ const handleQuickPickClick = (qp) => {
       <Divider />
 
       <section
-  aria-labelledby="quick-picks-heading"
-  style={{ padding: "0 20px 16px" }}
->
-  <SectionHeading id="quick-picks-heading">Quick routes</SectionHeading>
+        aria-labelledby="quick-picks-heading"
+        style={{ padding: "0 20px 16px" }}
+      >
+        <SectionHeading id="quick-picks-heading">Quick routes</SectionHeading>
 
-  <p
-    style={{
-      fontSize: 12,
-      color: "#64748b",
-      lineHeight: 1.5,
-      marginTop: 0,
-      marginBottom: 10,
-    }}
-  >
-  Start with a common route. These suggestions include student journeys and
-  visitor walks, so you can compare options quickly without setting points
-  manually. Most stay within the current study area, where air-quality and
-  noise coverage is more complete.
-  </p>
+        <p
+          style={{
+            fontSize: 12,
+            color: "#475569",
+            lineHeight: 1.5,
+            marginTop: 0,
+            marginBottom: 10,
+          }}
+        >
+          Start with a common route. These suggestions include student journeys
+          and visitor walks, so you can compare options quickly without setting
+          points manually. Most stay within the current study area, where
+          air-quality and noise coverage is more complete.
+        </p>
 
-  <ul
-    style={{
-      listStyle: "none",
-      padding: 0,
-      margin: 0,
-      display: "flex",
-      flexDirection: "column",
-      gap: 8,
-    }}
-  >
-    {QUICK_PICKS.map((qp) => {
-      const isActive = activeQuickPickLabel === qp.label;
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          {QUICK_PICKS.map((qp) => {
+            const isActive = activeQuickPickLabel === qp.label;
 
-      return (
-        <li key={qp.label}>
-          <button
-            type="button"
-            onClick={() => handleQuickPickClick(qp)}
-            aria-pressed={isActive}
-            aria-label={`${isActive ? "Selected quick route" : "Load quick route"}: ${qp.label}`}
-            style={{
-              width: "100%",
-              minHeight: 44,
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: isActive ? "2px solid #2563eb" : "1px solid #e2e8f0",
-              background: isActive ? "#eff6ff" : "#f8fafc",
-              cursor: "pointer",
-              textAlign: "left",
-              fontSize: 13,
-              color: isActive ? "#1d4ed8" : "#374151",
-              fontWeight: isActive ? 600 : 500,
-              lineHeight: 1.4,
-              outlineOffset: 2,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
-            }}
-          >
-            <span>{qp.label}</span>
+            return (
+              <li key={qp.label}>
+                <button
+                  type="button"
+                  onClick={() => handleQuickPickClick(qp)}
+                  aria-pressed={isActive}
+                  style={{
+                    width: "100%",
+                    minHeight: 44,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: isActive ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                    background: isActive ? "#eff6ff" : "#f8fafc",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontSize: 13,
+                    color: isActive ? "#1d4ed8" : "#374151",
+                    fontWeight: isActive ? 600 : 500,
+                    lineHeight: 1.4,
+                    outlineOffset: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                  }}
+                >
+                  <span>{qp.label}</span>
 
-            {isActive && (
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "#1d4ed8",
-                  border: "1px solid #bfdbfe",
-                  background: "#ffffff",
-                  borderRadius: 999,
-                  padding: "2px 8px",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Selected
-              </span>
-            )}
-          </button>
-        </li>
-      );
-    })}
-  </ul>
-</section>
+                  {isActive && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#1d4ed8",
+                        border: "1px solid #bfdbfe",
+                        background: "#ffffff",
+                        borderRadius: 999,
+                        padding: "2px 8px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Selected
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       <Divider />
 
       <section style={{ padding: "0 20px 16px" }}>
-  <Favorites
+        <Favorites
   startPoint={startPoint}
   endPoint={endPoint}
-  onLoad={onLoadFavorite}
+  onLoad={handleLoadFavoriteFromSidebar}
   selectedRoute={selectedRoute}
   pendingSavedRoute={pendingSavedRoute}
   onHandledPendingSavedRoute={() => setPendingSavedRoute(null)}
 />
-</section>
+      </section>
+
+      <div style={{ padding: "0 20px 8px" }}>
+        
+       <button
+  type="button"
+  onClick={() => onRequestFocus?.("mapLegend")}
+  disabled={!canJumpToMapLegend}
+  aria-disabled={!canJumpToMapLegend}
+  aria-label="Jump to the map legend on the map"
+  style={{
+    minHeight: 36,
+    padding: "6px 12px",
+    borderRadius: 8,
+    border: "1px solid #cbd5e1",
+    background: "#ffffff",
+    color: !canJumpToMapLegend ? "#94a3b8" : "#0f172a",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: canJumpToMapLegend ? "pointer" : "not-allowed",
+    opacity: canJumpToMapLegend ? 1 : 0.7,
+  }}
+>
+  Jump to map legend
+</button>
+      </div>
 
       <Divider />
 
       <section
-  ref={resultsRef}
-  aria-labelledby="results-heading"
-  style={{ padding: "0 20px" }}
->
+        ref={resultsRef}
+        tabIndex={-1}
+        aria-labelledby="results-heading"
+        style={{ padding: "0 20px", scrollMarginTop: 12 }}
+      >
         <SectionHeading id="results-heading">Route results</SectionHeading>
 
         {status === "idle" && !routes.length && (
           <p
             style={{
               fontSize: 13,
-              color: "#94a3b8",
+              color: "#64748b",
               textAlign: "center",
               padding: "24px 0",
               margin: 0,
+              lineHeight: 1.5,
             }}
           >
             Set a start and end point to see route options.
@@ -375,7 +491,7 @@ const handleQuickPickClick = (qp) => {
             style={{
               textAlign: "center",
               padding: "28px 0",
-              color: "#64748b",
+              color: "#475569",
             }}
           >
             <div
@@ -401,7 +517,7 @@ const handleQuickPickClick = (qp) => {
               borderRadius: 8,
               background: "#fef2f2",
               border: "1px solid #fecaca",
-              color: "#dc2626",
+              color: "#b91c1c",
               fontSize: 14,
               lineHeight: 1.5,
             }}
@@ -413,14 +529,15 @@ const handleQuickPickClick = (qp) => {
 
         {status === "done" && routes.length > 0 && (
           <RouteCards
-  routes={routes}
-  onHighlight={onHighlight}
-  onFilterChange={onFilterChange}
-  onDisplayOrderChange={onDisplayOrderChange}
-  onOpenNote={handleOpenNote}
-  onSaveRoute={setPendingSavedRoute}
-  startPoint={startPoint}
-  endPoint={endPoint}
+            routes={routes}
+            onHighlight={onHighlight}
+            onFilterChange={onFilterChange}
+            onDisplayOrderChange={onDisplayOrderChange}
+            onOpenNote={handleOpenNote}
+            onSaveRoute={setPendingSavedRoute}
+            startPoint={startPoint}
+            endPoint={endPoint}
+            firstFilterRef={resultsFirstFilterRef}
           />
         )}
       </section>
@@ -428,9 +545,10 @@ const handleQuickPickClick = (qp) => {
       <Divider />
 
       <section
-  ref={routeNoteRef}
-  aria-labelledby="route-note-heading"
-  style={{ padding: "0 20px 16px" }}
+        ref={routeNoteRef}
+        tabIndex={-1}
+        aria-labelledby="route-note-heading"
+        style={{ padding: "0 20px 16px", scrollMarginTop: 12 }}
       >
         <SectionHeading id="route-note-heading">Route note</SectionHeading>
 
@@ -440,7 +558,7 @@ const handleQuickPickClick = (qp) => {
           <p
             style={{
               fontSize: 12,
-              color: "#94a3b8",
+              color: "#64748b",
               lineHeight: 1.5,
               margin: 0,
             }}
@@ -450,17 +568,18 @@ const handleQuickPickClick = (qp) => {
         )}
       </section>
 
-      <div
+      <footer
+        aria-label="Data sources"
         style={{
           padding: "10px 20px 16px",
           fontSize: 11,
-          color: "#cbd5e1",
+          color: "#64748b",
           lineHeight: 1.5,
         }}
       >
         Air quality: LAEI 2022 &nbsp;·&nbsp; Routing: ORS &nbsp;·&nbsp; Map:
         OpenStreetMap
-      </div>
-    </aside>
+      </footer>
+    </div>
   );
 }

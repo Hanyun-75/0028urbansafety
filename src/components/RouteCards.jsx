@@ -1130,7 +1130,7 @@ function getSecondaryTags(route, sortBy, routes, primaryMetric, primaryTone) {
   return tags.slice(0, 2);
 }
 export default function RouteCards({
-  routes = [],
+  routes,
   onHighlight,
   onFilterChange,
   onDisplayOrderChange,
@@ -1138,6 +1138,7 @@ export default function RouteCards({
   onSaveRoute,
   startPoint,
   endPoint,
+  firstFilterRef,
 }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const [sortBy, setSortByLocal] = useState("overall");
@@ -1268,19 +1269,19 @@ export default function RouteCards({
           marginBottom: 12,
         }}
       >
-        <h2
-          id="routes-heading"
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: "#94a3b8",
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            margin: 0,
-          }}
-        >
-          {routes.length} routes found
-        </h2>
+        <h3
+  id="routes-heading"
+  style={{
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#475569",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    margin: 0,
+  }}
+>
+  {routes.length} routes found
+</h3>
       </div>
 
       <fieldset
@@ -1304,48 +1305,49 @@ export default function RouteCards({
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {SORT_OPTIONS.map((opt) => {
-            const isDisabled =
-              (opt.value === "air" && !tripHasComparableAir) ||
-              (opt.value === "noise" && !tripHasComparableNoise);
+  const isDisabled =
+    (opt.value === "air" && !tripHasComparableAir) ||
+    (opt.value === "noise" && !tripHasComparableNoise);
 
-            const isActive = sortBy === opt.value && !isDisabled;
+  const isActive = sortBy === opt.value && !isDisabled;
 
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  if (!isDisabled) setSortBy(opt.value);
-                }}
-                aria-pressed={isActive}
-                aria-disabled={isDisabled}
-                disabled={isDisabled}
-                style={{
-                  padding: "6px 12px",
-                  minHeight: 40,
-                  borderRadius: 999,
-                  border: isActive ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                  background: isActive ? "#2563eb" : "#f8fafc",
-                  color: isActive ? "white" : isDisabled ? "#94a3b8" : "#374151",
-                  cursor: isDisabled ? "not-allowed" : "pointer",
-                  fontSize: 12,
-                  fontWeight: isActive ? 600 : 400,
-                  transition: "all 0.15s",
-                  outlineOffset: 2,
-                  opacity: isDisabled ? 0.6 : 1,
-                }}
-                title={
-                  isDisabled && opt.value === "air"
-                    ? "Air-quality route comparison is unavailable for this trip."
-                    : isDisabled && opt.value === "noise"
-                    ? "Noise route comparison is unavailable for this trip."
-                    : undefined
-                }
-              >
-                {opt.label}
-              </button>
-            );
-          })}
+  return (
+    <button
+      key={opt.value}
+      ref={opt.value === "overall" ? firstFilterRef : null}
+      type="button"
+      onClick={() => {
+        if (!isDisabled) setSortBy(opt.value);
+      }}
+      aria-pressed={isActive}
+      aria-disabled={isDisabled}
+      disabled={isDisabled}
+      style={{
+        padding: "6px 12px",
+        minHeight: 40,
+        borderRadius: 999,
+        border: isActive ? "2px solid #2563eb" : "1px solid #e2e8f0",
+        background: isActive ? "#2563eb" : "#f8fafc",
+        color: isActive ? "white" : isDisabled ? "#94a3b8" : "#374151",
+        cursor: isDisabled ? "not-allowed" : "pointer",
+        fontSize: 12,
+        fontWeight: isActive ? 600 : 400,
+        transition: "all 0.15s",
+        outlineOffset: 2,
+        opacity: isDisabled ? 0.6 : 1,
+      }}
+      title={
+        isDisabled && opt.value === "air"
+          ? "Air-quality route comparison is unavailable for this trip."
+          : isDisabled && opt.value === "noise"
+          ? "Noise route comparison is unavailable for this trip."
+          : undefined
+      }
+    >
+      {opt.label}
+    </button>
+  );
+})}
         </div>
       </fieldset>
 
@@ -1364,7 +1366,7 @@ export default function RouteCards({
         <p
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#64748b",
             marginTop: 0,
             marginBottom: 10,
             lineHeight: 1.5,
@@ -1378,7 +1380,7 @@ export default function RouteCards({
         <p
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#64748b",
             marginTop: 0,
             marginBottom: 10,
             lineHeight: 1.5,
@@ -1392,7 +1394,7 @@ export default function RouteCards({
         <p
           style={{
             fontSize: 11,
-            color: "#94a3b8",
+            color: "#64748b",
             marginTop: 0,
             marginBottom: 10,
             lineHeight: 1.5,
@@ -1426,7 +1428,7 @@ export default function RouteCards({
           gap: 12,
           marginBottom: 4,
           fontSize: 11,
-          color: "#94a3b8",
+          color: "#64748b",
           flexWrap: "wrap",
         }}
       >
@@ -1447,7 +1449,7 @@ export default function RouteCards({
       <p
         style={{
           fontSize: 11,
-          color: "#94a3b8",
+          color: "#64748b",
           marginTop: 0,
           marginBottom: 12,
           lineHeight: 1.4,
@@ -1513,22 +1515,28 @@ const canSaveRoute = Boolean(startPoint && endPoint);
 
 
           return (
-            <article
-              key={origIdx}
-              aria-labelledby={routeHeadingId}
-              onMouseEnter={() => onHighlight?.(origIdx)}
-              onMouseLeave={() => onHighlight?.(activeIndex)}
-              style={{
-                borderRadius: 10,
-                border: isActive ? `2px solid ${routeColor}` : "1px solid #e2e8f0",
-                background: isActive ? "#f8fafc" : "white",
-                overflow: "hidden",
-                boxShadow: isActive
-                  ? `0 0 0 3px ${routeColor}22`
-                  : "0 1px 3px rgba(0,0,0,0.06)",
-                transition: "box-shadow 0.15s, border 0.15s",
-              }}
-            >
+           <article
+  key={origIdx}
+  aria-labelledby={routeHeadingId}
+  onMouseEnter={() => onHighlight?.(origIdx)}
+  onMouseLeave={() => onHighlight?.(activeIndex)}
+  onFocusCapture={() => onHighlight?.(origIdx)}
+  onBlurCapture={(e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      onHighlight?.(activeIndex);
+    }
+  }}
+  style={{
+    borderRadius: 10,
+    border: isActive ? `2px solid ${routeColor}` : "1px solid #e2e8f0",
+    background: isActive ? "#f8fafc" : "white",
+    overflow: "hidden",
+    boxShadow: isActive
+      ? `0 0 0 3px ${routeColor}22`
+      : "0 1px 3px rgba(0,0,0,0.06)",
+    transition: "box-shadow 0.15s, border 0.15s",
+  }}
+>
               <div style={{ height: 4, background: routeColor }} />
 
               <div style={{ padding: "10px 14px" }}>
@@ -1630,7 +1638,7 @@ const canSaveRoute = Boolean(startPoint && endPoint);
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#94a3b8",
+                      color: "#475569",
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
                       marginBottom: 5,
@@ -1696,7 +1704,7 @@ const canSaveRoute = Boolean(startPoint && endPoint);
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#94a3b8",
+                      color: "#64748b",
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
                       marginBottom: 5,

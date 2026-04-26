@@ -134,10 +134,10 @@ export default function Favorites({
     );
   };
 
-  const handleLoad = (fav) => {
-    onLoad?.(fav.start, fav.end, fav.route ?? null);
-    setLiveMessage(`Loaded saved route: ${fav.label}.`);
-  };
+const handleLoad = (fav) => {
+  onLoad?.(fav.start, fav.end, fav.route ?? null);
+  setLiveMessage(`Loaded saved route: ${fav.label}.`);
+};
 
   return (
     <section aria-labelledby="saved-routes-heading">
@@ -159,7 +159,7 @@ export default function Favorites({
           style={{
             fontSize: 12,
             fontWeight: 700,
-            color: "#94a3b8",
+            color: "#475569",
             textTransform: "uppercase",
             letterSpacing: "0.05em",
             margin: 0,
@@ -320,7 +320,7 @@ export default function Favorites({
         <p
           style={{
             fontSize: 13,
-            color: "#94a3b8",
+            color:  "#64748b",
             lineHeight: 1.5,
             margin: 0,
           }}
