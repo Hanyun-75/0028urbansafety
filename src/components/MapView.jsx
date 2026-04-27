@@ -1157,52 +1157,52 @@ const handleToggleDataSources = () => {
   </div>
 )}
         {shouldRenderStudyAreaCard && (
-  <aside
-    aria-labelledby="study-area-heading"
-    style={{
-      ...buildInfoCardStyle(showStudyAreaCard),
-      position: "absolute",
-      top: 12,
-      left: 12,
-      zIndex: 10,
-      color: "#0f172a",
-    }}
-  >
-    <div style={overlayHeaderRowStyle(showStudyAreaCard)}>
-      <h2 id="study-area-heading" style={overlayTitleStyle}>
-        Study area: Camden
-      </h2>
+  <section
+  aria-labelledby="study-area-heading"
+  style={{
+    ...buildInfoCardStyle(showStudyAreaCard),
+    position: "absolute",
+    top: 12,
+    left: 12,
+    zIndex: 10,
+    color: "#0f172a",
+  }}
+>
+  <div style={overlayHeaderRowStyle(showStudyAreaCard)}>
+    <h2 id="study-area-heading" style={overlayTitleStyle}>
+      Study area: Camden
+    </h2>
 
-      <button
-        type="button"
-        onClick={handleToggleStudyAreaCard}
-        aria-expanded={showStudyAreaCard}
-        aria-controls="study-area-panel"
-        aria-label={
-          showStudyAreaCard
-            ? "Hide study area information"
-            : "Show study area information"
-        }
-        style={buildOverlayToggleButtonStyle(showStudyAreaCard)}
-      >
-        {showStudyAreaCard ? "Hide" : "Show"}
-      </button>
+    <button
+      type="button"
+      onClick={handleToggleStudyAreaCard}
+      aria-expanded={showStudyAreaCard}
+      aria-controls="study-area-panel"
+      aria-label={
+        showStudyAreaCard
+          ? "Hide study area information"
+          : "Show study area information"
+      }
+      style={buildOverlayToggleButtonStyle(showStudyAreaCard)}
+    >
+      {showStudyAreaCard ? "Hide" : "Show"}
+    </button>
+  </div>
+
+  {showStudyAreaCard && (
+    <div
+      id="study-area-panel"
+      style={{
+        fontSize: 12,
+        lineHeight: 1.45,
+        color: "#334155",
+      }}
+    >
+      Areas outside the current study area are visually de-emphasised to clarify
+      data coverage and keep route comparison focused.
     </div>
-
-    {showStudyAreaCard && (
-      <div
-        id="study-area-panel"
-        style={{
-          fontSize: 12,
-          lineHeight: 1.45,
-          color: "#334155",
-        }}
-      >
-        Areas outside the current study area are visually de-emphasised to clarify
-        data coverage and keep route comparison focused.
-      </div>
-    )}
-  </aside>
+  )}
+</section>
 )}
   {shouldShowMapHint && (
   <div

@@ -49,11 +49,14 @@ button:focus-visible {
 
 a {
   color: #2563eb;
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
 }
 
 a:hover {
   color: #1d4ed8;
+  text-decoration-thickness: 2px;
 }
 
 .map-control-button:focus-visible {
