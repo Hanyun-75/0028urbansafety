@@ -176,7 +176,7 @@ export default function Sidebar({
   ) {
     window.requestAnimationFrame(() => {
       scrollSidebarTo(resultsRef);
-      resultsRef.current?.focus({ preventScroll: true });
+      focusWithoutPageJump(resultsRef.current);
     });
   }
 }, [focusRequest, status, routes, isCompactScreen]);
@@ -191,7 +191,7 @@ export default function Sidebar({
   ) {
     window.requestAnimationFrame(() => {
       scrollSidebarTo(resultsRef);
-      resultsFirstFilterRef.current?.focus({ preventScroll: true });
+      focusWithoutPageJump(resultsFirstFilterRef.current);
     });
   }
 }, [focusRequest, status, routes, isCompactScreen]);
@@ -287,7 +287,7 @@ export default function Sidebar({
         <p
           style={{
             fontSize: 12,
-            color: "#475569",
+            color: "#64748b",
             lineHeight: 1.5,
             margin: 0,
           }}
@@ -307,7 +307,7 @@ export default function Sidebar({
         <p
           style={{
             fontSize: 13,
-            color: "#475569",
+            color: "#64748b",
             marginTop: 0,
             marginBottom: 14,
             lineHeight: 1.5,
@@ -345,7 +345,7 @@ export default function Sidebar({
         <p
           style={{
             fontSize: 12,
-            color: "#475569",
+            color: "#64748b",
             lineHeight: 1.5,
             marginTop: 0,
             marginBottom: 10,
@@ -451,7 +451,7 @@ export default function Sidebar({
     minHeight: 36,
     padding: "6px 12px",
     borderRadius: 8,
-    border: "1px solid #cbd5e1",
+    border: "1px solid #CBD5E1",
     background: "#ffffff",
     color: !canJumpToMapLegend ? "#94a3b8" : "#0f172a",
     fontSize: 13,
@@ -582,8 +582,8 @@ export default function Sidebar({
           lineHeight: 1.5,
         }}
       >
-        Air quality: LAEI 2022 &nbsp;·&nbsp; Routing: ORS &nbsp;·&nbsp; Map:
-        OpenStreetMap
+          Air quality: LAEI 2022 &nbsp;·&nbsp; Noise: Defra / GLA &nbsp;·&nbsp; Routing:
+  ORS &nbsp;·&nbsp; Map: OpenStreetMap
       </footer>
     </div>
   );

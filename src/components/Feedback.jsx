@@ -79,6 +79,7 @@ export default function Feedback({ activeRoute }) {
     setSelectedTags([]);
     setText("");
   };
+  const textareaId = "route-note-textarea";
 
   const inputStyle = {
     width: "100%",
@@ -88,7 +89,7 @@ export default function Feedback({ activeRoute }) {
     fontSize: 13,
     color: "#1e293b",
     background: "#f8fafc",
-    outline: "none",
+    
     fontFamily: "inherit",
     boxSizing: "border-box",
   };
@@ -129,6 +130,7 @@ export default function Feedback({ activeRoute }) {
                 key={tag}
                 type="button"
                 onClick={() => toggleTag(tag)}
+                aria-pressed={selected}
                 style={{
                   padding: "5px 10px",
                   borderRadius: 999,
@@ -148,18 +150,31 @@ export default function Feedback({ activeRoute }) {
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <textarea
-          placeholder="Share a short note about how this route felt today..."
-          maxLength={160}
-          rows={3}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
-          aria-label="Route note"
-        />
-      </div>
+  <label
+    htmlFor={textareaId}
+    style={{
+      display: "block",
+      fontSize: 12,
+      color: "#475569",
+      marginBottom: 6,
+      fontWeight: 600,
+    }}
+  >
+    Add a short route note
+  </label>
 
-      <p style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.5, marginTop: 0, marginBottom: 10 }}>
+  <textarea
+    id={textareaId}
+    placeholder="Share a short note about how this route felt today..."
+    maxLength={160}
+    rows={3}
+    value={text}
+    onChange={(e) => setText(e.target.value)}
+    style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }}
+  />
+</div>
+
+      <p style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5, marginTop: 0, marginBottom: 10 }}>
         Please describe your experience of this walk rather than the area as a whole.
       </p>
 
@@ -185,7 +200,7 @@ export default function Feedback({ activeRoute }) {
 
       <div style={{ marginTop: 14 }}>
         {notesForRoute.length === 0 ? (
-          <p style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: "8px 0", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "#64748b", textAlign: "center", padding: "8px 0", margin: 0 }}>
             No route notes yet.
           </p>
         ) : (
@@ -197,7 +212,7 @@ export default function Feedback({ activeRoute }) {
                   padding: "10px 11px",
                   background: "#f8fafc",
                   borderRadius: 8,
-                  border: "1px solid #f1f5f9",
+                  border: "1px solid #E2E8F0",
                 }}
               >
                 <div
@@ -211,7 +226,7 @@ export default function Feedback({ activeRoute }) {
                   <span style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>
                     {note.routeLabelAtSubmit}
                   </span>
-                  <span style={{ fontSize: 11, color: "#94a3b8" }}>{timeAgo(note.time)}</span>
+                  <span style={{ fontSize: 11, color: "#64748b" }}>{timeAgo(note.time)}</span>
                 </div>
 
                 {note.tags?.length > 0 && (
@@ -221,7 +236,7 @@ export default function Feedback({ activeRoute }) {
                         key={tag}
                         style={{
                           background: "#ffffff",
-                          border: "1px solid #e2e8f0",
+                          border: "1px solid #CBD5E1",
                           color: "#475569",
                           padding: "3px 8px",
                           borderRadius: 999,

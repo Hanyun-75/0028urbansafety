@@ -1528,7 +1528,7 @@ const canSaveRoute = Boolean(startPoint && endPoint);
   }}
   style={{
     borderRadius: 10,
-    border: isActive ? `2px solid ${routeColor}` : "1px solid #e2e8f0",
+    border: isActive ? `2px solid ${routeColor}` : "1px solid #CBD5E1",
     background: isActive ? "#f8fafc" : "white",
     overflow: "hidden",
     boxShadow: isActive
@@ -1554,7 +1554,7 @@ const canSaveRoute = Boolean(startPoint && endPoint);
                     style={{
                       fontWeight: 700,
                       fontSize: 14,
-                      color: "#1e293b",
+                      color: "#0F172A",
                       margin: 0,
                     }}
                   >
@@ -1704,7 +1704,7 @@ const canSaveRoute = Boolean(startPoint && endPoint);
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
-                      color: "#64748b",
+                      color: "#475569",
                       textTransform: "uppercase",
                       letterSpacing: "0.05em",
                       marginBottom: 5,

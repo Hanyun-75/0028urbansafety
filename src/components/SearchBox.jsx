@@ -206,7 +206,7 @@ export default function SearchBox({
         style={{
           width: "100%",
           padding: "10px 12px",
-          border: "1px solid #d1d5db",
+          border: "1px solid #CBD5E1",
           borderRadius: 8,
           fontSize: 14,
         }}

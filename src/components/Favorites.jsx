@@ -197,10 +197,10 @@ export default function Favorites({
             minHeight: 40,
             padding: "8px 12px",
             borderRadius: 999,
-            border: "1px solid #e2e8f0",
+            border: "1px solid #CBD5E1",
             background: "#f8fafc",
             cursor: canSaveCurrent ? "pointer" : "not-allowed",
-            color: canSaveCurrent ? "#374151" : "#94a3b8",
+            color: canSaveCurrent ? "#334155" : "#94a3b8",
             fontSize: 12,
             fontWeight: 500,
             opacity: canSaveCurrent ? 1 : 0.7,
@@ -229,7 +229,7 @@ export default function Favorites({
         <div
           style={{
             padding: "10px 12px",
-            border: "1px solid #e2e8f0",
+            border: "1px solid #CBD5E1",
             borderRadius: 10,
             background: "#f8fafc",
             marginBottom: 12,
@@ -241,7 +241,7 @@ export default function Favorites({
               display: "block",
               fontSize: 12,
               fontWeight: 600,
-              color: "#374151",
+              color: "#334155",
               marginBottom: 6,
             }}
           >
@@ -387,7 +387,7 @@ export default function Favorites({
                         border: "none",
                         cursor: "pointer",
                         fontSize: 13,
-                        color: "#374151",
+                        color: "#334155",
                         fontWeight: 600,
                         padding: 0,
                       }}
@@ -418,7 +418,7 @@ export default function Favorites({
                       minHeight: 40,
                       padding: "8px 10px",
                       borderRadius: 8,
-                      border: "1px solid #e2e8f0",
+                      border: "1px solid #CBD5E1",
                       background: "white",
                       cursor: "pointer",
                       color: "#475569",
