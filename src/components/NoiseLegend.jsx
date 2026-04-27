@@ -1,5 +1,5 @@
 const NOISE_BANDS = [
-  { label: "≥ 75.0 dB (Danger zone)", color: "#c1121f" },
+  { label: "≥ 75 dB noise band", color: "#c1121f" },
 ];
 
 export default function NoiseLegend({
@@ -68,7 +68,7 @@ export default function NoiseLegend({
         }}
       >
         <h2 id="noise-legend-heading" style={titleStyle}>
-          High noise areas
+          Estimated high-noise areas
         </h2>
 
         <button

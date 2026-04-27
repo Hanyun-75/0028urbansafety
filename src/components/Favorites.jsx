@@ -44,11 +44,14 @@ function buildRouteDefaultLabel(savedRoute) {
   return `${startLabel} to ${endLabel} – ${routeLabel}`;
 }
 
+function getFavoriteKind(fav) {
+  return fav?.kind === "route" ? "route" : "trip";
+}
+
 export default function Favorites({
   startPoint,
   endPoint,
   onLoad,
-  selectedRoute,
   pendingSavedRoute,
   onHandledPendingSavedRoute,
 }) {
@@ -63,8 +66,9 @@ export default function Favorites({
   const saveHintId = useId();
 
   const canSaveCurrent = Boolean(startPoint && endPoint);
+  const isSavingRoute = Boolean(draftSavedRoute);
 
-  // Route card 触发的 Save route
+  // Triggered by the Save route button inside a route card.
   useEffect(() => {
     if (!pendingSavedRoute) return;
 
@@ -74,7 +78,7 @@ export default function Favorites({
     onHandledPendingSavedRoute?.();
   }, [pendingSavedRoute, onHandledPendingSavedRoute]);
 
-  // aria-live 文案自动清空
+  // Clear the live announcement after a short delay.
   useEffect(() => {
     if (!liveMessage) return;
     const timer = window.setTimeout(() => setLiveMessage(""), 2500);
@@ -84,6 +88,8 @@ export default function Favorites({
   const handleStartSave = () => {
     if (!canSaveCurrent) return;
 
+    // Save trip only stores start and end points.
+    // Specific route geometry/data should only be saved from a route card.
     setDraftSavedRoute(null);
     setLabel(buildDefaultLabel(startPoint, endPoint));
     setIsNaming(true);
@@ -101,43 +107,56 @@ export default function Favorites({
 
     if (!currentStart || !currentEnd) return;
 
-    const defaultLabel = draftSavedRoute
+    const savingRoute = Boolean(draftSavedRoute);
+
+    const defaultLabel = savingRoute
       ? buildRouteDefaultLabel(draftSavedRoute)
       : buildDefaultLabel(currentStart, currentEnd);
 
     const entry = {
       id: `${Date.now()}`,
-      kind: draftSavedRoute ? "route" : "trip",
+      kind: savingRoute ? "route" : "trip",
       label: label.trim() || defaultLabel,
       start: currentStart,
       end: currentEnd,
-      route: draftSavedRoute ?? selectedRoute ?? null,
+      route: savingRoute ? draftSavedRoute : null,
       savedAt: new Date().toISOString(),
     };
 
     const updated = [entry, ...favorites].slice(0, MAX_FAVORITES);
     saveFavorites(updated);
     setFavorites(updated);
+
     setLabel("");
     setIsNaming(false);
     setDraftSavedRoute(null);
-    setLiveMessage(`Saved route: ${entry.label}.`);
+    setLiveMessage(
+      `${savingRoute ? "Saved route" : "Saved trip"}: ${entry.label}.`
+    );
   };
 
   const handleDelete = (id) => {
     const removed = favorites.find((f) => f.id === id);
     const updated = favorites.filter((f) => f.id !== id);
+
     saveFavorites(updated);
     setFavorites(updated);
-    setLiveMessage(
-      removed ? `Removed saved route: ${removed.label}.` : "Saved route removed."
-    );
+
+    if (removed) {
+      const kind = getFavoriteKind(removed);
+      setLiveMessage(`Removed saved ${kind}: ${removed.label}.`);
+    } else {
+      setLiveMessage("Saved item removed.");
+    }
   };
 
-const handleLoad = (fav) => {
-  onLoad?.(fav.start, fav.end, fav.route ?? null);
-  setLiveMessage(`Loaded saved route: ${fav.label}.`);
-};
+  const handleLoad = (fav) => {
+    const kind = getFavoriteKind(fav);
+    const savedRoute = kind === "route" ? fav.route ?? null : null;
+
+    onLoad?.(fav.start, fav.end, savedRoute);
+    setLiveMessage(`Loaded saved ${kind}: ${fav.label}.`);
+  };
 
   return (
     <section aria-labelledby="saved-routes-heading">
@@ -165,7 +184,7 @@ const handleLoad = (fav) => {
             margin: 0,
           }}
         >
-          Saved routes
+          Saved trips and routes
         </h2>
 
         <button
@@ -187,7 +206,7 @@ const handleLoad = (fav) => {
             opacity: canSaveCurrent ? 1 : 0.7,
           }}
         >
-          Save current
+          Save trip
         </button>
       </div>
 
@@ -202,8 +221,8 @@ const handleLoad = (fav) => {
         }}
       >
         {canSaveCurrent
-          ? "Save the current start and end points for quick reuse."
-          : "Set both a start point and an end point to save the current trip."}
+          ? "Save start and end points for quick reuse. Route cards can save one specific route."
+          : "Set both a start point and an end point to save this trip."}
       </p>
 
       {isNaming && (
@@ -226,7 +245,7 @@ const handleLoad = (fav) => {
               marginBottom: 6,
             }}
           >
-            Route name
+            {isSavingRoute ? "Route name" : "Trip name"}
           </label>
 
           <p
@@ -239,7 +258,7 @@ const handleLoad = (fav) => {
               marginBottom: 8,
             }}
           >
-            {draftSavedRoute
+            {isSavingRoute
               ? `Saving ${draftSavedRoute.routeLabel}. You can keep the default name or edit it.`
               : "Saving the current trip. You can keep the default name or edit it."}
           </p>
@@ -292,7 +311,7 @@ const handleLoad = (fav) => {
                 fontWeight: 600,
               }}
             >
-              Save route
+              {isSavingRoute ? "Save route" : "Save trip"}
             </button>
 
             <button
@@ -320,12 +339,12 @@ const handleLoad = (fav) => {
         <p
           style={{
             fontSize: 13,
-            color:  "#64748b",
+            color: "#64748b",
             lineHeight: 1.5,
             margin: 0,
           }}
         >
-          No saved routes yet.
+          No saved trips or routes yet.
         </p>
       ) : (
         <ul
@@ -338,77 +357,82 @@ const handleLoad = (fav) => {
             gap: 8,
           }}
         >
-          {favorites.map((fav) => (
-            <li key={fav.id}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 8,
-                  background: "#f8fafc",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() => handleLoad(fav)}
-                    aria-label={`Load saved route ${fav.label}`}
-                    style={{
-                      width: "100%",
-                      minHeight: 40,
-                      textAlign: "left",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      color: "#374151",
-                      fontWeight: 600,
-                      padding: 0,
-                    }}
-                  >
-                    {fav.label}
-                  </button>
+          {favorites.map((fav) => {
+            const kind = getFavoriteKind(fav);
+            const typeLabel = kind === "route" ? "Saved route" : "Saved trip";
 
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "#64748b",
-                      lineHeight: 1.5,
-                      margin: "4px 0 0 0",
-                    }}
-                  >
-                    {fav.kind === "route"
-                      ? `Saved route${fav.route?.routeLabel ? ` · ${fav.route.routeLabel}` : ""}`
-                      : "Saved trip"}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleDelete(fav.id)}
-                  aria-label={`Remove saved route ${fav.label}`}
+            return (
+              <li key={fav.id}>
+                <div
                   style={{
-                    minWidth: 40,
-                    minHeight: 40,
-                    padding: "8px 10px",
-                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 8,
+                    padding: "10px 12px",
                     border: "1px solid #e2e8f0",
-                    background: "white",
-                    cursor: "pointer",
-                    color: "#475569",
-                    fontSize: 12,
-                    fontWeight: 500,
-                    flexShrink: 0,
+                    borderRadius: 8,
+                    background: "#f8fafc",
                   }}
                 >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleLoad(fav)}
+                      aria-label={`Load saved ${kind}: ${fav.label}`}
+                      style={{
+                        width: "100%",
+                        minHeight: 40,
+                        textAlign: "left",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        color: "#374151",
+                        fontWeight: 600,
+                        padding: 0,
+                      }}
+                    >
+                      {fav.label}
+                    </button>
+
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "#64748b",
+                        lineHeight: 1.5,
+                        margin: "4px 0 0 0",
+                      }}
+                    >
+                      {kind === "route" && fav.route?.routeLabel
+                        ? `${typeLabel} · ${fav.route.routeLabel}`
+                        : typeLabel}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(fav.id)}
+                    aria-label={`Remove saved ${kind}: ${fav.label}`}
+                    style={{
+                      minWidth: 40,
+                      minHeight: 40,
+                      padding: "8px 10px",
+                      borderRadius: 8,
+                      border: "1px solid #e2e8f0",
+                      background: "white",
+                      cursor: "pointer",
+                      color: "#475569",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      flexShrink: 0,
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

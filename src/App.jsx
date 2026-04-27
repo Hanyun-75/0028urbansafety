@@ -161,7 +161,7 @@ return (
     <header className="app-header">
   <h1>Urban Walking Route Explorer</h1>
   <p className="subtitle">
-    Compare walking routes by air quality, noise, and travel time around UCL.
+    Explore walking-route trade-offs in Camden by air quality, noise and walking cost.
   </p>
 </header>
 <div className="sr-only" aria-live="polite" aria-atomic="true">

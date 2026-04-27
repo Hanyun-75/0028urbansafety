@@ -292,9 +292,9 @@ export default function Sidebar({
             margin: 0,
           }}
         >
-          For students and newcomers walking around central London, this
-          prototype helps compare route trade-offs rather than giving a single
-          “best” answer.
+          For UCL students and newcomers walking in Camden, this tool
+          helps compare route options by air, noise, distance and 
+          estimated time. It does not choose one “best” route for everyone.
         </p>
       </div>
 
@@ -313,8 +313,8 @@ export default function Sidebar({
             lineHeight: 1.5,
           }}
         >
-          Search or click the map to set start and end points, then compute
-          routes.
+          Search or click the map to set start and end points, then compare
+          route options.
         </p>
 
         <SearchBox
@@ -351,10 +351,10 @@ export default function Sidebar({
             marginBottom: 10,
           }}
         >
-          Start with a common route. These suggestions include student journeys
-          and visitor walks, so you can compare options quickly without setting
-          points manually. Most stay within the current study area, where
-          air-quality and noise coverage is more complete.
+          Start with common walking journeys around Camden and UCL.
+          Presets fill in the start and end points so you can compare
+          routes quickly. They are starting points for comparison,
+          not route recommendations.
         </p>
 
         <ul

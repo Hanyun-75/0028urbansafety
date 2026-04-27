@@ -335,7 +335,7 @@ const handleZoomOut = () => {
     if (kind === "start") {
       setAnnouncement("Start point selected. Now choose an end point.");
     } else if (kind === "end") {
-      setAnnouncement("End point selected. You can now compute routes.");
+      setAnnouncement("End point selected. You can now compare routes options.");
     }
 
     reverseGeocode(lat, lng).then((name) => {
@@ -1021,7 +1021,7 @@ const handleToggleDataSources = () => {
                 lineHeight: 1.4,
               }}
             >
-              Hazard points
+              Environmental data points
             </h3>
 
             <ul
@@ -1057,7 +1057,7 @@ const handleToggleDataSources = () => {
                   }}
                 />
                 <span>
-                  Air hazard point: NO₂ &gt; 40 μg/m³ or PM2.5 &gt; 15 μg/m³
+                  Higher air-pollution sample: NO₂ &gt; 40 μg/m³ or PM2.5 &gt; 15 μg/m³
                 </span>
               </li>
 
@@ -1085,7 +1085,7 @@ const handleToggleDataSources = () => {
                     marginTop: 3,
                   }}
                 />
-                <span>Noise hazard point: ≥ 75 dB</span>
+                <span>Higher-noise sample: ≥ 75 dB</span>
               </li>
             </ul>
           </div>
@@ -1198,8 +1198,8 @@ const handleToggleDataSources = () => {
         color: "#334155",
       }}
     >
-      Areas outside the current study area are visually de-emphasised to clarify
-      data coverage and keep route comparison focused.
+      Areas outside Camden are faded to show the study-area focus. This is
+      a data boundary, not a safety boundary.
     </div>
   )}
 </section>
@@ -1299,7 +1299,7 @@ const handleToggleDataSources = () => {
             cursor: canCompute ? "pointer" : "not-allowed",
           }}
         >
-          {loading ? "Calculating…" : "Compute routes"}
+          {loading ? "Calculating…" : "Compare routes"}
         </button>
 
         <button
@@ -1419,7 +1419,7 @@ const handleToggleDataSources = () => {
     cursor: "pointer",
   }}
 >
-  {focusStudyArea ? "Show full context" : "Focus study area"}
+  {focusStudyArea ? "Show wider map context" : "Focus study area"}
 </button>
 
         

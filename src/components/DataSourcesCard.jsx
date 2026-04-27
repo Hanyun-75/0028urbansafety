@@ -68,6 +68,12 @@ export default function DataSourcesCard({ isOpen, onToggle, expandedWidth }) {
     textDecoration: "underline",
     lineHeight: 1.4,
   };
+  const noteStyle = {
+  fontSize: 11,
+  color: "#475569",
+  lineHeight: 1.4,
+  margin: "0 0 12px 0",
+  };
 
   return (
     <section
@@ -102,10 +108,13 @@ export default function DataSourcesCard({ isOpen, onToggle, expandedWidth }) {
 
       {isOpen && (
         <div id={panelId}>
-          <p id={descriptionId} style={srOnlyStyle}>
-            External links to the air-quality, noise, and routing data sources
-            used in this map. Links open in a new tab.
-          </p>
+  <p id={descriptionId} style={srOnlyStyle}>
+    External links to the air-quality, noise, and routing sources used in this map. Links open in a new tab.
+  </p>
+
+  <p style={noteStyle}>
+    Air and noise data support comparison only. They do not measure real-time or personal exposure.
+  </p>
 
           <div style={{ marginBottom: 12 }}>
             <h3 style={subheadingStyle}>Air quality</h3>
