@@ -4,7 +4,7 @@ let gridBounds = null;
 export async function loadLAEIData() {
   if (gridData) return gridData;
 
-  const res = await fetch("/data/laei2022_camden_compact.json");
+  const res = await fetch(`${import.meta.env.BASE_URL}data/laei2022_camden_compact.json`);
   if (!res.ok) {
     throw new Error(`Failed to load LAEI 2022 data: ${res.status}`);
   }
